@@ -10,3 +10,6 @@ edition = "2018"
 version = "5.1"
 default_features = false
 features = ["std"]
+
+[dev-dependencies]
+criterion = "0.3"
