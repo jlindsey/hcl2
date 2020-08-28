@@ -17,8 +17,3 @@ repos:
       - id: fmt
       - id: clippy
       - id: cargo-check
-
-  - repo: https://github.com/syntaqx/git-hooks
-    rev: v0.0.16
-    hooks:
-      - id: circleci-config-validate
