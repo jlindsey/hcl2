@@ -10,16 +10,44 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  lint:
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-    - name: Lint
-      run: cargo clippy
-      
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v2.1.1
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: v1-${{ runner.os }}-cargo-${{ hashFiles('Cargo.toml') }}
+      - name: Lint
+        run: cargo clippy
+                
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v2.1.1
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: v1-${{ runner.os }}-cargo-${{ hashFiles('Cargo.toml') }}
+      - name: Run tests
+        run: cargo test --verbose
+        
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/cache@v2.1.1
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: v1-${{ runner.os }}-cargo-${{ hashFiles('Cargo.toml') }}
+      - name: Build
+        run: cargo build --verbose
