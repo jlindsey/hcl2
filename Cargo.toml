@@ -4,6 +4,9 @@ version = "0.1.0"
 authors = ["Josh Lindsey <joshua.s.lindsey@gmail.com>"]
 edition = "2018"
 license = "ISC"
+repository = "https://git.sr.ht/~jlindsey/hcl2"
+keywords = ["serialization", "nom", "serde", "hcl2", "ast"]
+categories = ["parsing", "parser-implementations", "encoding", "template-engine"]
 
 [features]
 default = []
