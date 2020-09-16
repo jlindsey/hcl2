@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use hcl2::parser::parse_str;
+use hcl2::ast::parse_str;
 
 const TEST_BODY: &str = "test block \"label\" {
     internal {
@@ -11,6 +11,8 @@ const TEST_BODY: &str = "test block \"label\" {
         f = false
         g = true
         h = null
+        i = [1, 2, 3]
+        j = [false, null, \"string\"]
     }
 }\n";
 
