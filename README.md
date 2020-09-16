@@ -1,5 +1,7 @@
 HCL2
 ====
+[![builds.sr.ht status](https://builds.sr.ht/~jlindsey/hcl2.svg)](https://builds.sr.ht/~jlindsey/hcl2?)
+
 Rust [HCL2][1] parsing and serialization lib.
 
 [1]: https://github.com/hashicorp/hcl/tree/hcl2
