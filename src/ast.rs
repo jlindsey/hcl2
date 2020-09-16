@@ -19,8 +19,10 @@ use nom_locate::LocatedSpan;
 use nom_tracable::{tracable_parser, TracableInfo};
 
 pub type Span<'a> = LocatedSpan<&'a str, TracableInfo>;
+
 type Result<'a, I = Span<'a>, O = Node, E = (I, ErrorKind)> =
     std::result::Result<(I, O), nom::Err<E>>;
+type OResult<'a> = std::result::Result<Tree, Box<dyn Error + 'a>>;
 
 fn valid_ident_start_char(c: char) -> bool {
     c.is_alphabetic()
@@ -164,7 +166,7 @@ fn body(i: Span) -> Result {
     )(i)
 }
 
-fn file(i: Span) -> std::result::Result<Tree, Box<dyn Error + '_>> {
+fn file(i: Span) -> OResult {
     let (_, tree) = complete(fold_many1(
         delimited(multispace0, alt((attribute, block)), multispace0),
         Tree::new(),
@@ -180,6 +182,12 @@ fn file(i: Span) -> std::result::Result<Tree, Box<dyn Error + '_>> {
 pub fn parse_test(i: &str, info: TracableInfo) -> Result {
     let span = Span::new_extra(i, info);
     body(span)
+}
+
+pub fn parse_str(i: &str) -> OResult {
+    let info = TracableInfo::default();
+    let span = Span::new_extra(i, info);
+    file(span)
 }
 
 #[cfg(test)]
