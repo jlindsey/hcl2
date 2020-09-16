@@ -2,22 +2,8 @@
 
 use std::io::{self, Read};
 
-use hcl2::ast::parse_test;
-use nom_tracable::{cumulative_histogram, histogram, TracableInfo};
-
-#[cfg(not(feature = "trace"))]
-fn tracable_info() -> TracableInfo {
-    TracableInfo::default()
-}
-
-#[cfg(feature = "trace")]
-fn tracable_info() -> TracableInfo {
-    TracableInfo::new()
-        .backward(true)
-        .forward(true)
-        .parser_width(60)
-        .fold("term")
-}
+use hcl2::ast::parse_str;
+use nom_tracable::{cumulative_histogram, histogram};
 
 fn main() {
     let mut buf = vec![];
@@ -25,10 +11,10 @@ fn main() {
     stdin.read_to_end(&mut buf).unwrap();
 
     let i = String::from_utf8(buf).unwrap();
+    println!("input: {}", i);
 
-    let res = parse_test(&i, tracable_info()).unwrap();
-    println!("parsed ast: {:#?}", res.1);
-    println!("remaining input: {:?}", res.0);
+    let res = parse_str(&i).unwrap();
+    println!("parsed ast: {:#?}", res);
 
     if cfg!(feature = "trace") {
         histogram();
