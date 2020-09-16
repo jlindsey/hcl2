@@ -17,11 +17,11 @@ tasks:
       cargo build --lib
       cargo check
       cargo clippy
-      cargo test
+      cargo test --lib
   - nightly: |
       rustup default nightly
       cd hcl2
       cargo build --lib ||:
       cargo check ||:
       cargo clippy ||:
-      cargo test ||:
+      cargo test --lib ||:
