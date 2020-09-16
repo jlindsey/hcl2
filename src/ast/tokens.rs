@@ -14,6 +14,17 @@ pub struct Node {
     pub token: Token,
 }
 
+impl Default for Node {
+    fn default() -> Self {
+        Node {
+            offset: 0,
+            line: 0,
+            column: 0,
+            token: Token::Unknown,
+        }
+    }
+}
+
 impl Node {
     pub fn new(token: Token, span: &Span) -> Self {
         Node {
@@ -31,13 +42,6 @@ impl Node {
             line: node.line,
             column: node.column,
         }
-    }
-
-    /// Fill in the location fields from a Span
-    pub fn range_from_span(&mut self, span: &Span) {
-        self.offset = span.location_offset();
-        self.line = span.location_line();
-        self.column = span.get_utf8_column() as u32;
     }
 }
 
@@ -102,6 +106,11 @@ pub struct Block {
 /// Tokens are the parsed elements of an HCL2 document
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
+    /// Unknown is used to be able to implement Default for Node, it should
+    /// never actually be encountered outside this lib's internals and should
+    /// be treated as a bug if it is.
+    Unknown,
+
     Identifier(String),
 
     // Basic literal types
@@ -159,6 +168,58 @@ impl Token {
     }
 }
 
+#[macro_export]
+macro_rules! ident {
+    ($s:expr) => {
+        Token::Identifier(String::from($s))
+    };
+}
+
+#[macro_export]
+macro_rules! string {
+    ($s:expr) => {
+        Token::String(String::from($s))
+    };
+}
+
+#[macro_export]
+macro_rules! int {
+    ($i:expr) => {
+        Token::Int($i)
+    };
+}
+
+#[macro_export]
+macro_rules! float {
+    ($f:expr) => {
+        Token::Float($f)
+    };
+}
+
+#[macro_export]
+macro_rules! node {
+    (rc $t:expr) => {
+        Rc::new(node!($t))
+    };
+
+    ($t:expr) => {
+        Node {
+            token: $t,
+            ..Default::default()
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! attr {
+    ($i:expr, $e:expr) => {
+        Token::Attribute(Attribute {
+            ident: node!(rc ident!($i)),
+            expr: node!(rc $e),
+        })
+    };
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -179,5 +240,16 @@ mod test {
     fn as_identifier() {
         let a = Token::Identifier("test_ident".into());
         assert_eq!(a.as_identifier(), Some("test_ident"));
+    }
+
+    #[test]
+    fn as_boolean() {
+        let t = Token::True;
+        assert_eq!(t.as_boolean(), Some(true));
+        assert_eq!(t.as_true(), Some(()));
+
+        let f = Token::False;
+        assert_eq!(f.as_boolean(), Some(false));
+        assert_eq!(f.as_false(), Some(()));
     }
 }
