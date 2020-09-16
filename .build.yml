@@ -1,0 +1,27 @@
+---
+image: archlinux
+packages:
+  - rustup
+sources:
+  - https://git.sr.ht/~jlindsey/hcl2
+tasks:
+  - setup: |
+      rustup toolchain install nightly stable
+      rustup component add clippy --toolchain stable
+      rustup component add clippy --toolchain nightly
+      cd hcl2
+      rustup run stable cargo fetch
+  - stable: |
+      rustup default stable
+      cd hcl2
+      cargo build --lib
+      cargo check
+      cargo clippy
+      cargo test
+  - nightly: |
+      rustup default nightly
+      cd hcl2
+      cargo build --lib ||:
+      cargo check ||:
+      cargo clippy ||:
+      cargo test ||:
