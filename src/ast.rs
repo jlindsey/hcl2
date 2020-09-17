@@ -77,7 +77,7 @@ fn string(i: Span) -> Result {
     map(
         delimited(
             char('"'),
-            escaped(is_not("\\\""), '\\', one_of(r#"rnt"\"#)),
+            escaped(is_not("\\\"\n"), '\\', one_of(r#"rnt"\"#)),
             char('"'),
         ),
         |span: Span| Node::new(Token::String(String::from(*span.fragment())), &span),
@@ -308,10 +308,20 @@ mod test {
     #[test]
     fn test_string() {
         let info = TracableInfo::default();
-        let input = Span::new_extra(r#""hello there""#, info);
-        let (span, node) = string(input).unwrap();
-        assert_eq!(span.fragment().len(), 0);
-        assert_eq!(node.token.as_string(), Some("hello there"));
+
+        let cases = vec![
+            (r#""hello there""#, string!("hello there")),
+            (r#""with numbers 1 2 3""#, string!("with numbers 1 2 3")),
+            (r#""escaped \"""#, string!("escaped \\\"")),
+            (r#""escaped \n""#, string!("escaped \\n")),
+        ];
+
+        for (input, expected) in cases {
+            let input = Span::new_extra(input, info);
+            let (span, node) = string(input).unwrap();
+            assert_eq!(span.fragment().len(), 0);
+            assert_eq!(node.token, expected);
+        }
     }
 
     #[test]
