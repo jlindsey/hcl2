@@ -6,6 +6,22 @@ Rust [HCL2][1] parsing and serialization lib.
 
 [1]: https://github.com/hashicorp/hcl/tree/hcl2
 
+TODOs
+-----
+(For a minimum 1.0 version, in no particular order)
+
+* [ ] Finish basic syntax elements
+    * [ ] Objects
+    * [ ] Function calls
+    * [ ] Number exponents
+    * [ ] Operations
+    * [ ] Expressions
+    * [ ] Heredocs
+* [ ] Template sub-language
+* [ ] Context-based Evaluation
+* [ ] Unicode compliance pass
+* [ ] Serde serialize / deserialze
+
 Links
 -----
 * [Spec][2]
@@ -18,4 +34,6 @@ Links
 
 License
 -------
-Licensed under the ISC License ([LICENSE](LICENSE) or https://opensource.org/licenses/ISC).
+Licensed under the ISC License ([LICENSE](LICENSE) or [https://opensource.org/licenses/ISC][5]).
+
+[5]: https://opensource.org/licenses/ISC
