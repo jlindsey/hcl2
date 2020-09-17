@@ -68,7 +68,7 @@ fn boolean(i: Span) -> Result {
     match head {
         't' => true_literal(i),
         'f' => false_literal(i),
-        _ => Err(Err::Failure((i, ErrorKind::Tag))),
+        _ => Err(Err::Error((i, ErrorKind::Tag))),
     }
 }
 
@@ -134,7 +134,7 @@ fn literal_val(i: Span) -> Result {
         '"' => string(i),
         '-' | '0'..='9' => number(i),
         '<' => todo!(), // heredoc
-        _ => Err(Err::Failure((i, ErrorKind::Char))),
+        _ => Err(Err::Error((i, ErrorKind::Char))),
     }
 }
 
@@ -159,10 +159,10 @@ fn attribute(i: Span) -> Result {
 #[tracable_parser]
 fn block_label(i: Span) -> Result {
     let (_, head): (_, char) = peek(anychar)(i)?;
-    match head {
-        '"' => string(i),
-        ' ' => Err(Err::Error((i, ErrorKind::Char))),
-        _ => identifier(i),
+    if head == '"' {
+        string(i)
+    } else {
+        identifier(i)
     }
 }
 
