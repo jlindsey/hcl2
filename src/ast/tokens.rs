@@ -183,6 +183,23 @@ macro_rules! string {
 }
 
 #[macro_export]
+macro_rules! boolean {
+    (true) => {
+        Token::True
+    };
+    (false) => {
+        Token::False
+    };
+}
+
+#[macro_export]
+macro_rules! null {
+    () => {
+        Token::Null
+    };
+}
+
+#[macro_export]
 macro_rules! int {
     ($i:expr) => {
         Token::Int($i)
@@ -218,6 +235,13 @@ macro_rules! attr {
             expr: node!(rc $e),
         })
     };
+}
+
+#[macro_export]
+macro_rules! list {
+    ($($i:expr),*) => {
+        Token::List(vec![$(node!($i),)*])
+    }
 }
 
 #[cfg(test)]
