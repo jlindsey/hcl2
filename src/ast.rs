@@ -138,11 +138,38 @@ fn literal_val(i: Span) -> Result {
     }
 }
 
+// NOTE: technically a "tuple" in the spec, but that name is reserved here
+#[tracable_parser]
+fn array(i: Span) -> Result {
+    map(
+        terminated(
+            tuple((
+                recognize(pair(char('['), multispace0)),
+                opt(literal_val),
+                many0(preceded(pair(char(','), multispace0), literal_val)),
+            )),
+            tuple((opt(char(',')), multispace0, char(']'))),
+        ),
+        |(span, first, mut tail): (Span, Option<Node>, Vec<Node>)| {
+            let items = first.map_or(Vec::new(), |head| {
+                let mut v: Vec<Node> = vec![head];
+                v.append(&mut tail);
+                v
+            });
+            Node::new(Token::List(items), &span)
+        },
+    )(i)
+}
+
 #[tracable_parser]
 fn attribute(i: Span) -> Result {
     map(
         terminated(
-            separated_pair(identifier, tuple((space0, char('='), space0)), literal_val),
+            separated_pair(
+                identifier,
+                tuple((space0, char('='), space0)),
+                alt((array, literal_val)),
+            ),
             opt(newline),
         ),
         |(ident, value): (Node, Node)| {
@@ -380,6 +407,52 @@ mod test {
             // are dummied and won't match
             assert_eq!(attr.ident.token, expected.ident.token,);
             assert_eq!(attr.expr.token, expected.expr.token,);
+        }
+    }
+
+    #[test]
+    fn test_tuple() {
+        let info = TracableInfo::default();
+
+        let cases = vec![
+            (
+                "[true, false, null]",
+                list![boolean!(true), boolean!(false), null!()],
+            ),
+            (
+                r#"[
+                1,
+                2,
+                3,
+               ]"#,
+                list![int!(1), int!(2), int!(3)],
+            ),
+            ("[]", list![]),
+            (
+                r#"[
+                    "test string",
+                    "another string",
+                    false,
+                    17.38
+                   ]"#,
+                Token::List(vec![
+                    node!(string!("test string")),
+                    node!(string!("another string")),
+                    node!(Token::False),
+                    node!(float!(17.38)),
+                ]),
+            ),
+        ];
+
+        for (input, expected) in cases {
+            let span = Span::new_extra(input, info);
+            let (span, node) = array(span).unwrap();
+            assert_eq!(span.fragment().len(), 0);
+
+            let expected = expected.as_list().unwrap();
+            for (i, item) in node.token.as_list().unwrap().iter().enumerate() {
+                assert_eq!(item.token, expected[i].token);
+            }
         }
     }
 }
