@@ -305,19 +305,10 @@ mod test {
     #[test]
     fn test_identifier() {
         let cases = vec![
-            ("test", Token::Identifier("test".into())),
-            (
-                "test_with_underscores",
-                Token::Identifier("test_with_underscores".into()),
-            ),
-            (
-                "test-with-dashes",
-                Token::Identifier("test-with-dashes".into()),
-            ),
-            (
-                "test-14_with_numbers",
-                Token::Identifier("test-14_with_numbers".into()),
-            ),
+            ("test", ident!("test")),
+            ("test_with_underscores", ident!("test_with_underscores")),
+            ("test-with-dashes", ident!("test-with-dashes")),
+            ("test-14_with_numbers", ident!("test-14_with_numbers")),
         ];
 
         for (input, expected) in cases {
@@ -332,7 +323,7 @@ mod test {
     fn test_boolean() {
         let info = TracableInfo::default();
 
-        let cases = vec![("true", Token::True), ("false", Token::False)];
+        let cases = vec![("true", boolean!(true)), ("false", boolean!(false))];
 
         for (input, expected) in cases {
             let input_span = Span::new_extra(input, info);
@@ -369,12 +360,12 @@ mod test {
         let info = TracableInfo::default();
 
         let cases = vec![
-            ("1.23", Token::Float(1.23)),
-            ("47", Token::Int(47)),
-            ("17.3809", Token::Float(17.3809)),
-            ("17892037", Token::Int(17892037)),
-            ("-38", Token::Int(-38)),
-            ("-471.399", Token::Float(-471.399)),
+            ("1.23", float!(1.23)),
+            ("47", int!(47)),
+            ("17.3809", float!(17.3809)),
+            ("17892037", int!(17892037)),
+            ("-38", int!(-38)),
+            ("-471.399", float!(-471.399)),
         ];
 
         for (input, expected) in cases {
@@ -396,8 +387,8 @@ mod test {
         let info = TracableInfo::default();
 
         let cases = vec![
-            ("foo = null", attr!("foo", Token::Null)),
-            ("test_1 = true", attr!("test_1", Token::True)),
+            ("foo = null", attr!("foo", null!())),
+            ("test_1 = true", attr!("test_1", boolean!(true))),
             (
                 r#"test-2 = "a test string""#,
                 attr!("test-2", string!("a test string")),
@@ -451,7 +442,7 @@ mod test {
                 Token::List(vec![
                     node!(string!("test string")),
                     node!(string!("another string")),
-                    node!(Token::False),
+                    node!(boolean!(false)),
                     node!(float!(17.38)),
                 ]),
             ),
