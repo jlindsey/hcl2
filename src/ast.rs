@@ -279,9 +279,22 @@ fn file(i: Span) -> OResult {
     Ok(tree)
 }
 
+#[cfg(feature = "trace")]
+fn get_tracer() -> TracableInfo {
+    TracableInfo::new()
+        .backward(true)
+        .forward(true)
+        .parser_width(40)
+        .fold("term")
+}
+
+#[cfg(not(feature = "trace"))]
+fn get_tracer() -> TracableInfo {
+    Default::default()
+}
+
 pub fn parse_str(i: &str) -> OResult {
-    let info = TracableInfo::default();
-    let span = Span::new_extra(i, info);
+    let span = Span::new_extra(i, get_tracer());
     file(span)
 }
 
