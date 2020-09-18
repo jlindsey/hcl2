@@ -13,6 +13,10 @@ const TEST_BODY: &str = "test block \"label\" {
         h = null
         i = [1, 2, 3]
         j = [false, null, \"string\"]
+        k = <<EOF
+        heredoc string
+        is here, doc
+        EOF
     }
 }\n";
 
