@@ -10,7 +10,7 @@ use nom::{
     character::complete::{anychar, char, digit1, multispace0, newline, one_of, space0, space1},
     combinator::{all_consuming, complete, map, opt, peek, recognize},
     error::ErrorKind,
-    multi::{fold_many1, many0, separated_list},
+    multi::{fold_many1, many0, many_till, separated_list},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
     Err,
 };
@@ -73,7 +73,30 @@ fn boolean(i: Span) -> Result {
 }
 
 #[tracable_parser]
-fn string(i: Span) -> Result {
+fn heredoc(i: Span) -> Result {
+    let (i, (opening, ident, _)) = tuple((alt((tag("<<-"), tag("<<"))), identifier, newline))(i)?;
+    let truncate = *opening.fragment() == "<<-";
+
+    let (i, content) = map(
+        many_till(
+            anychar,
+            tuple((space0, tag(ident.token.as_identifier().unwrap()), newline)),
+        ),
+        |(chs, _)| chs.into_iter().collect::<String>(),
+    )(i)?;
+
+    let ident = Rc::new(ident);
+    let heredoc = Heredoc {
+        ident,
+        truncate,
+        content,
+    };
+
+    Ok((i, Node::new(Token::Heredoc(heredoc), &opening)))
+}
+
+#[tracable_parser]
+fn single_line_string(i: Span) -> Result {
     map(
         delimited(
             char('"'),
@@ -82,6 +105,16 @@ fn string(i: Span) -> Result {
         ),
         |span: Span| Node::new(Token::String(String::from(*span.fragment())), &span),
     )(i)
+}
+
+#[tracable_parser]
+fn string(i: Span) -> Result {
+    let (_, head): (_, char) = peek(anychar)(i)?;
+    match head {
+        '"' => single_line_string(i),
+        '<' => heredoc(i),
+        _ => Err(Err::Error((i, ErrorKind::Char))),
+    }
 }
 
 // TODO: factor this out to multiple parsers
@@ -131,9 +164,8 @@ fn literal_val(i: Span) -> Result {
     match head {
         'n' => null_literal(i),
         't' | 'f' => boolean(i),
-        '"' => string(i),
+        '"' | '<' => string(i),
         '-' | '0'..='9' => number(i),
-        '<' => todo!(), // heredoc
         _ => Err(Err::Error((i, ErrorKind::Char))),
     }
 }
@@ -458,5 +490,48 @@ mod test {
                 assert_eq!(item.token, expected[i].token);
             }
         }
+    }
+
+    #[test]
+    fn test_non_trunc_heredoc() {
+        let info = TracableInfo::default();
+
+        let test_str = "this is
+        a test
+        string
+        in
+        a
+        heredoc\n";
+        let input = format!("<<EOF\n{}EOF\n", test_str);
+        let input = Span::new_extra(&input, info);
+        let (span, node) = heredoc(input).unwrap();
+        assert_eq!(span.fragment().len(), 0);
+
+        let doc = node.token.as_heredoc().unwrap();
+        assert_eq!(doc.ident.token, ident!("EOF"));
+        assert!(!doc.truncate);
+        assert_eq!(&doc.content, test_str);
+    }
+
+    #[test]
+    fn test_trunc_heredoc() {
+        let info = TracableInfo::default();
+
+        let test_str = "this is
+        another test
+        string
+        in
+        a
+        heredoc
+            but this time it is truncated!\n";
+        let input = format!("<<-EOF\n{}EOF\n", test_str);
+        let input = Span::new_extra(&input, info);
+        let (span, node) = heredoc(input).unwrap();
+        assert_eq!(span.fragment().len(), 0);
+
+        let doc = node.token.as_heredoc().unwrap();
+        assert_eq!(doc.ident.token, ident!("EOF"));
+        assert!(doc.truncate);
+        assert_eq!(&doc.content, test_str);
     }
 }

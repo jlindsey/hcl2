@@ -16,7 +16,7 @@ TODOs
     * [ ] Number exponents
     * [ ] Operations
     * [ ] Expressions
-    * [ ] Heredocs
+    * [x] Heredocs
 * [ ] Template sub-language
 * [ ] Context-based Evaluation
 * [ ] Unicode compliance pass

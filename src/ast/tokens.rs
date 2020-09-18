@@ -81,6 +81,14 @@ macro_rules! gen_as {
     };
 }
 
+/// Heredoc node
+#[derive(Debug, Clone, PartialEq)]
+pub struct Heredoc {
+    pub ident: Rc<Node>,
+    pub truncate: bool,
+    pub content: String,
+}
+
 /// Function call node
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function {
@@ -120,6 +128,7 @@ pub enum Token {
     Int(i64),
     Float(f64),
     String(String),
+    Heredoc(Heredoc),
 
     // Expression terms
     Function(Rc<Function>),
@@ -147,6 +156,7 @@ impl Token {
     gen_as!(int, Token::Int(i), &i64, i);
     gen_as!(float, Token::Float(i), &f64, i);
     gen_as!(string, Token::String(s), &str, s);
+    gen_as!(heredoc, Token::Heredoc(h), &Heredoc, h);
 
     gen_as!(function, Token::Function(f), Rc<Function>, clone f);
 
