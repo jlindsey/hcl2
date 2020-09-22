@@ -1,48 +1,156 @@
-use std::rc::Rc;
+use std::{
+    convert::TryFrom,
+    num::{ParseFloatError, ParseIntError},
+    rc::Rc,
+};
 
-use super::Span;
+use super::{Node, N};
 use paste::paste;
+use thiserror::Error;
 
 pub type Tree = Vec<Node>;
 
-/// A single node in the AST containing a span and parsed token
+#[derive(Debug, Error)]
+pub enum TokenError {
+    #[error("unable to parse int: {0}")]
+    ParseIntError(#[from] ParseIntError),
+
+    #[error("unable to parse float: {0}")]
+    ParseFloatError(#[from] ParseFloatError),
+
+    #[error("unrecognized operator: {0}")]
+    OperatorError(String),
+}
+
+/// Heredoc node
 #[derive(Debug, Clone, PartialEq)]
-pub struct Node {
-    pub offset: usize,
-    pub line: u32,
-    pub column: u32,
-    pub token: Token,
+pub struct Heredoc {
+    pub ident: Rc<Node>,
+    pub truncate: bool,
+    pub content: String,
 }
 
-impl Default for Node {
-    fn default() -> Self {
-        Node {
-            offset: 0,
-            line: 0,
-            column: 0,
-            token: Token::Unknown,
+/// Function call node
+#[derive(Debug, Clone, PartialEq)]
+pub struct Function {
+    pub name: Rc<Node>,
+    pub args: Vec<Node>,
+}
+
+/// Uniary operation node
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnaryOp {
+    pub operator: Rc<Node>,
+    pub operand: Rc<Node>,
+}
+
+/// Binary operation node
+#[derive(Debug, Clone, PartialEq)]
+pub struct BinaryOp {
+    pub operator: Rc<Node>,
+    pub left: Rc<Node>,
+    pub right: Rc<Node>,
+}
+
+/// Attribute node
+#[derive(Debug, Clone, PartialEq)]
+pub struct Attribute {
+    pub ident: Rc<Node>,
+    pub expr: Rc<Node>,
+}
+
+/// Block node
+#[derive(Debug, Clone, PartialEq)]
+pub struct Block {
+    pub ident: Rc<Node>,
+    pub labels: Vec<Node>,
+    pub body: Option<Rc<Node>>,
+}
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+pub enum Operator {
+    Plus,
+    Minus,
+    Multiply,
+    Divide,
+    Modulus,
+
+    And,
+    Or,
+    Not,
+
+    Equal,
+    NotEqual,
+
+    Greater,
+    Less,
+    GreaterEqual,
+    LessEqual,
+}
+
+impl TryFrom<&str> for Operator {
+    type Error = TokenError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "+" => Ok(Operator::Plus),
+            "-" => Ok(Operator::Minus),
+            "*" => Ok(Operator::Multiply),
+            "/" => Ok(Operator::Divide),
+            "%" => Ok(Operator::Modulus),
+
+            "&&" => Ok(Operator::And),
+            "||" => Ok(Operator::Or),
+            "!" => Ok(Operator::Not),
+
+            "==" => Ok(Operator::Equal),
+            "!=" => Ok(Operator::NotEqual),
+
+            ">" => Ok(Operator::Greater),
+            "<" => Ok(Operator::Less),
+            ">=" => Ok(Operator::GreaterEqual),
+            "<=" => Ok(Operator::LessEqual),
+
+            _ => Err(TokenError::OperatorError(value.into())),
         }
     }
 }
 
-impl Node {
-    pub fn new(token: Token, span: &Span) -> Self {
-        Node {
-            token,
-            offset: span.location_offset(),
-            line: span.location_line(),
-            column: span.get_utf8_column() as u32,
-        }
-    }
+/// Tokens are the parsed elements of an HCL2 document
+#[derive(Debug, Clone, PartialEq)]
+pub enum Token {
+    /// Unknown is used to be able to implement Default for Node, it should
+    /// never actually be encountered outside this lib's internals and should
+    /// be treated as a bug if it is.
+    Unknown,
 
-    pub fn from_node(token: Token, node: &Node) -> Self {
-        Node {
-            token,
-            offset: node.offset,
-            line: node.line,
-            column: node.column,
-        }
-    }
+    Identifier(String),
+
+    // Basic literal types
+    Null,
+    True,
+    False,
+    Number(N),
+    String(String),
+    Heredoc(Heredoc),
+
+    // Expression terms
+    Function(Function),
+    Operator(Operator),
+    BinaryOp(BinaryOp),
+    UnaryOp(UnaryOp),
+
+    // Containers
+    List(Vec<Node>),
+    Object(Vec<Node>),
+
+    // Body elements
+    LineComment(String),
+    BlockComment(String),
+    Attribute(Attribute),
+    Block(Block),
+
+    // Body
+    Body(Vec<Node>),
 }
 
 macro_rules! gen_as {
@@ -81,84 +189,20 @@ macro_rules! gen_as {
     };
 }
 
-/// Heredoc node
-#[derive(Debug, Clone, PartialEq)]
-pub struct Heredoc {
-    pub ident: Rc<Node>,
-    pub truncate: bool,
-    pub content: String,
-}
-
-/// Function call node
-#[derive(Debug, Clone, PartialEq)]
-pub struct Function {
-    pub name: Node,
-    pub args: Vec<Node>,
-}
-
-/// Attribute node
-#[derive(Debug, Clone, PartialEq)]
-pub struct Attribute {
-    pub ident: Rc<Node>,
-    pub expr: Rc<Node>,
-}
-
-/// Block node
-#[derive(Debug, Clone, PartialEq)]
-pub struct Block {
-    pub ident: Rc<Node>,
-    pub labels: Vec<Node>,
-    pub body: Option<Rc<Node>>,
-}
-
-/// Tokens are the parsed elements of an HCL2 document
-#[derive(Debug, Clone, PartialEq)]
-pub enum Token {
-    /// Unknown is used to be able to implement Default for Node, it should
-    /// never actually be encountered outside this lib's internals and should
-    /// be treated as a bug if it is.
-    Unknown,
-
-    Identifier(String),
-
-    // Basic literal types
-    Null,
-    True,
-    False,
-    Int(i64),
-    Float(f64),
-    String(String),
-    Heredoc(Heredoc),
-
-    // Expression terms
-    Function(Rc<Function>),
-
-    // Containers
-    List(Vec<Node>),
-    Object(Vec<Node>),
-
-    // Body elements
-    LineComment(String),
-    BlockComment(String),
-    Attribute(Attribute),
-    Block(Block),
-
-    // Body
-    Body(Vec<Node>),
-}
-
 impl Token {
     gen_as!(identifier, Token::Identifier(s), &str, s);
 
     gen_as!(null, Token::Null);
     gen_as!(true, Token::True);
     gen_as!(false, Token::False);
-    gen_as!(int, Token::Int(i), &i64, i);
-    gen_as!(float, Token::Float(i), &f64, i);
     gen_as!(string, Token::String(s), &str, s);
+    gen_as!(number, Token::Number(n), &N, n);
     gen_as!(heredoc, Token::Heredoc(h), &Heredoc, h);
 
-    gen_as!(function, Token::Function(f), Rc<Function>, clone f);
+    gen_as!(function, Token::Function(f), &Function, f);
+    gen_as!(operator, Token::Operator(o), &Operator, o);
+    gen_as!(binary_op, Token::BinaryOp(o), &BinaryOp, o);
+    gen_as!(unary_op, Token::UnaryOp(u), &UnaryOp, u);
 
     gen_as!(list, Token::List(l), &Vec<Node>, l);
     gen_as!(object, Token::Object(o), &Vec<Node>, o);
@@ -193,6 +237,26 @@ macro_rules! string {
 }
 
 #[macro_export]
+macro_rules! operator {
+    ($s:expr) => {
+        Token::Operator(Operator::try_from($s).unwrap())
+    };
+}
+
+#[macro_export]
+macro_rules! number {
+    (-$s:expr) => {
+        Token::UnaryOp(UnaryOp{
+            operator: node!(rc operator!("-")),
+            operand: node!(rc number!($s)),
+        })
+    };
+    ($s:expr) => {
+        Token::Number($s.into())
+    };
+}
+
+#[macro_export]
 macro_rules! boolean {
     (true) => {
         Token::True
@@ -206,20 +270,6 @@ macro_rules! boolean {
 macro_rules! null {
     () => {
         Token::Null
-    };
-}
-
-#[macro_export]
-macro_rules! int {
-    ($i:expr) => {
-        Token::Int($i)
-    };
-}
-
-#[macro_export]
-macro_rules! float {
-    ($f:expr) => {
-        Token::Float($f)
     };
 }
 

@@ -1,7 +1,11 @@
-use std::{error::Error, rc::Rc};
+use std::{convert::TryFrom, error::Error, rc::Rc};
 
 #[macro_use]
 mod tokens;
+mod node;
+mod number;
+pub use node::Node;
+pub use number::N;
 pub use tokens::*;
 
 use nom::{
@@ -117,44 +121,48 @@ fn string(i: Span) -> Result {
     }
 }
 
+#[tracable_parser]
+fn sign(i: Span) -> Result {
+    let (i, span) = alt((tag("-"), tag("+")))(i)?;
+    Operator::try_from(*span.fragment())
+        .map(|op| (i, Node::new(Token::Operator(op), &span)))
+        .map_err(|_| Err::Error((span, ErrorKind::ParseTo)))
+}
+
 // TODO: factor this out to multiple parsers
 // TODO: The negative sign is technically a uniary operation as defined by the spec
 // and so should be factored out into the expression syntax parser once that is in
 #[tracable_parser]
 fn number(i: Span) -> Result {
     let start = i;
-    let (i, mult) = map(
-        opt(char('-')),
-        |span: Option<_>| -> i8 {
-            if span.is_some() {
-                -1
-            } else {
-                1
+    let (i, maybe_sign) = opt(sign)(i)?;
+
+    let (i, num) = map(
+        tuple((digit1, opt(preceded(char('.'), digit1)))),
+        |(dec, maybe_fract): (Span, Option<Span>)| {
+            let mut buf = String::from(*dec.fragment());
+            if let Some(fract) = maybe_fract {
+                buf.push('.');
+                buf.push_str(*fract.fragment());
             }
+
+            let n: N = buf
+                .parse()
+                .map_err(|_| Err::Failure((dec, ErrorKind::ParseTo)))?;
+            Ok(Node::new(Token::Number(n), &start))
         },
     )(i)?;
-    let (i, dec) = map(digit1, |span: Span| {
-        span.fragment()
-            .parse::<i64>()
-            .map_err(|_| Err::Failure((span, ErrorKind::ParseTo)))
-    })(i)?;
-    let dec = dec?;
-    let (i, maybe_fract) = map(opt(preceded(char('.'), digit1)), |span: Option<Span>| {
-        span.map(|s| {
-            let mut buf = String::from("0.");
-            buf.push_str(*s.fragment());
-            buf.parse::<f64>()
-                .map_err(|_| Err::Failure((s, ErrorKind::ParseTo)))
-        })
-    })(i)?;
 
-    match maybe_fract {
-        Some(Ok(fract)) => Ok((
-            i,
-            Node::new(Token::Float((dec as f64 + fract) * mult as f64), &start),
-        )),
-        Some(Err(e)) => Err(e),
-        None => Ok((i, Node::new(Token::Int(dec * mult as i64), &start))),
+    if let Some(s) = maybe_sign {
+        let s = Rc::new(s);
+        let unary = UnaryOp {
+            operator: Rc::clone(&s),
+            operand: Rc::new(num?),
+        };
+
+        Ok((i, Node::from_node(Token::UnaryOp(unary), &s)))
+    } else {
+        Ok((i, num?))
     }
 }
 
@@ -334,6 +342,22 @@ pub fn parse_str(i: &str) -> OResult {
 mod test {
     use super::*;
 
+    impl Node {
+        fn same_token(&self, other: &Node) -> bool {
+            match &self.token {
+                Token::BinaryOp(token) => other.token.as_binary_op().map_or(false, |op| {
+                    token.left.same_token(&op.left)
+                        && token.right.same_token(&op.right)
+                        && token.operator.same_token(&op.operator)
+                }),
+                Token::UnaryOp(token) => other.token.as_unary_op().map_or(false, |op| {
+                    token.operand.same_token(&op.operand) && token.operator.same_token(&op.operator)
+                }),
+                token => token == &other.token,
+            }
+        }
+    }
+
     #[test]
     fn test_identifier() {
         let cases = vec![
@@ -392,25 +416,19 @@ mod test {
         let info = TracableInfo::default();
 
         let cases = vec![
-            ("1.23", float!(1.23)),
-            ("47", int!(47)),
-            ("17.3809", float!(17.3809)),
-            ("17892037", int!(17892037)),
-            ("-38", int!(-38)),
-            ("-471.399", float!(-471.399)),
+            ("1.23", number!(1.23)),
+            ("47", number!(47)),
+            ("17.3809", number!(17.3809)),
+            ("17892037", number!(17892037)),
+            ("-38", number!(-38)),
+            ("-471.399", number!(-471.399)),
         ];
 
         for (input, expected) in cases {
             let span = Span::new_extra(input, info);
             let (span, node) = number(span).unwrap();
             assert_eq!(span.fragment().len(), 0);
-            assert_eq!(node.token, expected);
-
-            match expected {
-                Token::Int(i) => assert_eq!(node.token.as_int(), Some(&i)),
-                Token::Float(f) => assert_eq!(node.token.as_float(), Some(&f)),
-                _ => panic!("wrong type"),
-            }
+            assert!(node.same_token(&node!(expected)));
         }
     }
 
@@ -427,7 +445,7 @@ mod test {
             ),
             (
                 "another_test = -193.5\n",
-                attr!("another_test", float!(-193.5)),
+                attr!("another_test", number!(-193.5)),
             ),
         ];
 
@@ -442,7 +460,7 @@ mod test {
             // compare just the tokens; the expected node location fields
             // are dummied and won't match
             assert_eq!(attr.ident.token, expected.ident.token,);
-            assert_eq!(attr.expr.token, expected.expr.token,);
+            assert!(attr.expr.same_token(&expected.expr));
         }
     }
 
@@ -461,7 +479,7 @@ mod test {
                 2,
                 3,
                ]"#,
-                list![int!(1), int!(2), int!(3)],
+                list![number!(1), number!(2), number!(3)],
             ),
             ("[]", list![]),
             (
@@ -475,7 +493,7 @@ mod test {
                     node!(string!("test string")),
                     node!(string!("another string")),
                     node!(boolean!(false)),
-                    node!(float!(17.38)),
+                    node!(number!(17.38)),
                 ]),
             ),
         ];
