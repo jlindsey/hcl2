@@ -22,7 +22,7 @@ jobs:
             target
           key: v1-${{ runner.os }}-cargo-${{ hashFiles('Cargo.toml') }}
       - name: Lint
-        run: cargo clippy
+        run: cargo clippy --lib
                 
   test:
     runs-on: ubuntu-latest
@@ -36,7 +36,7 @@ jobs:
             target
           key: v1-${{ runner.os }}-cargo-${{ hashFiles('Cargo.toml') }}
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --lib
         
   build:
     runs-on: ubuntu-latest
@@ -50,4 +50,4 @@ jobs:
             target
           key: v1-${{ runner.os }}-cargo-${{ hashFiles('Cargo.toml') }}
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --lib
