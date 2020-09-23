@@ -392,21 +392,21 @@ mod test {
     use super::*;
 
     impl Node {
-        fn same_token(&self, other: &Node) {
+        fn assert_same_token(&self, other: &Node) {
             match &self.token {
                 Token::BinaryOp(token) => {
                     if let Some(op) = other.token.as_binary_op() {
-                        token.left.same_token(&op.left);
-                        token.right.same_token(&op.right);
-                        token.operator.same_token(&op.operator);
+                        token.left.assert_same_token(&op.left);
+                        token.right.assert_same_token(&op.right);
+                        token.operator.assert_same_token(&op.operator);
                     } else {
                         panic!("wrong type");
                     }
                 }
                 Token::UnaryOp(token) => {
                     if let Some(op) = other.token.as_unary_op() {
-                        token.operand.same_token(&op.operand);
-                        token.operator.same_token(&op.operator);
+                        token.operand.assert_same_token(&op.operand);
+                        token.operator.assert_same_token(&op.operator);
                     } else {
                         panic!("wrong type");
                     }
@@ -496,7 +496,7 @@ mod test {
             let span = Span::new_extra(input, info);
             let (span, node) = number(span).unwrap();
             assert_eq!(span.fragment().len(), 0);
-            node.same_token(&node!(expected));
+            node.assert_same_token(&node!(expected));
         }
     }
 
@@ -528,7 +528,7 @@ mod test {
             // compare just the tokens; the expected node location fields
             // are dummied and won't match
             assert_eq!(attr.ident.token, expected.ident.token,);
-            attr.expr.same_token(&expected.expr);
+            attr.expr.assert_same_token(&expected.expr);
         }
     }
 
