@@ -10,7 +10,7 @@ pub use tokens::*;
 
 use nom::{
     branch::alt,
-    bytes::complete::{escaped, is_not, tag, take_while, take_while_m_n},
+    bytes::complete::{escaped, is_not, tag, tag_no_case, take_while, take_while_m_n},
     character::complete::{anychar, char, digit1, multispace0, newline, one_of, space0, space1},
     combinator::{all_consuming, complete, map, opt, peek, recognize},
     error::ErrorKind,
@@ -129,6 +129,25 @@ fn sign(i: Span) -> Result {
         .map_err(|_| Err::Error((span, ErrorKind::ParseTo)))
 }
 
+#[tracable_parser]
+fn exponent(i: Span) -> Result<Span, i64> {
+    let (i, (maybe_sign, num)) = preceded(tag_no_case("e"), pair(opt(sign), digit1))(i)?;
+
+    let n: i64 = (*num.fragment())
+        .parse()
+        .map_err(|_| Err::Failure((i, ErrorKind::ParseTo)))?;
+
+    if let Some(Node {
+        token: Token::Operator(Operator::Minus),
+        ..
+    }) = maybe_sign
+    {
+        Ok((i, -n))
+    } else {
+        Ok((i, n))
+    }
+}
+
 // TODO: factor this out to multiple parsers
 // TODO: The negative sign is technically a uniary operation as defined by the spec
 // and so should be factored out into the expression syntax parser once that is in
@@ -149,20 +168,50 @@ fn number(i: Span) -> Result {
             let n: N = buf
                 .parse()
                 .map_err(|_| Err::Failure((dec, ErrorKind::ParseTo)))?;
-            Ok(Node::new(Token::Number(n), &start))
+
+            Ok(n)
         },
     )(i)?;
+    let num = num?;
 
-    if let Some(s) = maybe_sign {
-        let s = Rc::new(s);
+    let (i, maybe_exp) = opt(exponent)(i)?;
+    let num = maybe_exp.map_or(num, |exp| match num {
+        N::Int(i) => {
+            let pow = 10i64.pow(exp.abs() as u32);
+            if exp < 0 {
+                N::Int(i * (1 / pow))
+            } else {
+                N::Int(i * pow)
+            }
+        }
+        N::Float(f) => {
+            let pow = 10i64.pow(exp.abs() as u32) as f64;
+            if exp < 0 {
+                N::Float(f * (1.0 / pow))
+            } else {
+                N::Int((f * pow) as i64)
+            }
+        }
+    });
+
+    let num = Node::new(Token::Number(num), &start);
+
+    if let Some(
+        op @ Node {
+            token: Token::Operator(Operator::Minus),
+            ..
+        },
+    ) = maybe_sign
+    {
+        let op = Rc::new(op);
         let unary = UnaryOp {
-            operator: Rc::clone(&s),
-            operand: Rc::new(num?),
+            operator: Rc::clone(&op),
+            operand: Rc::new(num),
         };
 
-        Ok((i, Node::from_node(Token::UnaryOp(unary), &s)))
+        Ok((i, Node::from_node(Token::UnaryOp(unary), &op)))
     } else {
-        Ok((i, num?))
+        Ok((i, num))
     }
 }
 
@@ -343,17 +392,33 @@ mod test {
     use super::*;
 
     impl Node {
-        fn same_token(&self, other: &Node) -> bool {
+        fn same_token(&self, other: &Node) {
             match &self.token {
-                Token::BinaryOp(token) => other.token.as_binary_op().map_or(false, |op| {
-                    token.left.same_token(&op.left)
-                        && token.right.same_token(&op.right)
-                        && token.operator.same_token(&op.operator)
-                }),
-                Token::UnaryOp(token) => other.token.as_unary_op().map_or(false, |op| {
-                    token.operand.same_token(&op.operand) && token.operator.same_token(&op.operator)
-                }),
-                token => token == &other.token,
+                Token::BinaryOp(token) => {
+                    if let Some(op) = other.token.as_binary_op() {
+                        token.left.same_token(&op.left);
+                        token.right.same_token(&op.right);
+                        token.operator.same_token(&op.operator);
+                    } else {
+                        panic!("wrong type");
+                    }
+                }
+                Token::UnaryOp(token) => {
+                    if let Some(op) = other.token.as_unary_op() {
+                        token.operand.same_token(&op.operand);
+                        token.operator.same_token(&op.operator);
+                    } else {
+                        panic!("wrong type");
+                    }
+                }
+                Token::Number(N::Float(f1)) => {
+                    if let Some(N::Float(f2)) = other.token.as_number() {
+                        assert!((f1 - f2).abs() < f64::EPSILON);
+                    } else {
+                        panic!("wrong type")
+                    }
+                }
+                token => assert_eq!(token, &other.token),
             }
         }
     }
@@ -422,13 +487,16 @@ mod test {
             ("17892037", number!(17892037)),
             ("-38", number!(-38)),
             ("-471.399", number!(-471.399)),
+            ("1.7e8", number!(170000000)),
+            ("-17E10", number!(-170000000000)),
+            ("8.6e-6", number!(0.0000086)),
         ];
 
         for (input, expected) in cases {
             let span = Span::new_extra(input, info);
             let (span, node) = number(span).unwrap();
             assert_eq!(span.fragment().len(), 0);
-            assert!(node.same_token(&node!(expected)));
+            node.same_token(&node!(expected));
         }
     }
 
@@ -460,7 +528,7 @@ mod test {
             // compare just the tokens; the expected node location fields
             // are dummied and won't match
             assert_eq!(attr.ident.token, expected.ident.token,);
-            assert!(attr.expr.same_token(&expected.expr));
+            attr.expr.same_token(&expected.expr);
         }
     }
 

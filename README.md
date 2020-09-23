@@ -13,7 +13,7 @@ TODOs
 * [ ] Finish basic syntax elements
     * [ ] Objects
     * [ ] Function calls
-    * [ ] Number exponents
+    * [x] Number scientific notation
     * [ ] Operations
     * [ ] Expressions
     * [x] Heredocs
