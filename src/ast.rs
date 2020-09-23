@@ -428,6 +428,7 @@ fn get_tracer() -> TracableInfo {
         .backward(true)
         .forward(true)
         .parser_width(40)
+        .color(false)
         .fold("term")
 }
 
@@ -598,21 +599,34 @@ mod test {
         Ok(())
     }
 
-    #[test]
-    fn test_function() {
+    #[rstest(input, expected,
+        case("test_func(1, 2, 3)", function!("test_func", number!(1), number!(2), number!(3))),
+        case("foo(false)", function!("foo", boolean!(false))),
+        case(
+            "bar([1, 2, 3]...)",
+            function!("bar", unary!("...", list!(number!(1), number!(2), number!(3))))
+        ),
+        ::trace
+    )]
+    fn test_function(input: &'static str, expected: Token) -> Result {
         let info = TracableInfo::default();
-
-        let test_str = "test_func(1, 2, 3)";
-        let input = Span::new_extra(test_str, info);
-        let (span, node) = function(input).unwrap();
+        let input = Span::new_extra(input, info);
+        let (span, node) = function(input)?;
         assert_eq!(span.fragment().len(), 0);
 
-        let f = node.token.as_function().unwrap();
-        assert_eq!(f.name.token, ident!("test_func"));
-        let expected = vec![node!(number!(1)), node!(number!(2)), node!(number!(3))];
-        for (i, n) in expected.iter().enumerate() {
+        let f = node
+            .token
+            .as_function()
+            .ok_or("node.token was not a function")?;
+        let expected = expected
+            .as_function()
+            .ok_or("expected was not a function")?;
+        f.name.assert_same_token(&expected.name);
+        for (i, n) in expected.args.iter().enumerate() {
             f.args[i].assert_same_token(n);
         }
+
+        Ok(())
     }
 
     #[test]
@@ -667,7 +681,10 @@ mod test {
                         token.right.assert_same_token(&op.right);
                         token.operator.assert_same_token(&op.operator);
                     } else {
-                        panic!("wrong type");
+                        panic!(
+                            "expected BinaryOp, got {:?}; self is {:?}",
+                            other.token, self.token
+                        );
                     }
                 }
                 Token::UnaryOp(token) => {
@@ -675,14 +692,20 @@ mod test {
                         token.operand.assert_same_token(&op.operand);
                         token.operator.assert_same_token(&op.operator);
                     } else {
-                        panic!("wrong type");
+                        panic!(
+                            "expected UnaryOp, got {:?}; self is {:?}",
+                            other.token, self.token
+                        );
                     }
                 }
                 Token::Number(N::Float(f1)) => {
                     if let Some(N::Float(f2)) = other.token.as_number() {
                         assert!((f1 - f2).abs() < f64::EPSILON);
                     } else {
-                        panic!("wrong type")
+                        panic!(
+                            "expected N, got {:?}; self is {:?}",
+                            other.token, self.token
+                        )
                     }
                 }
                 Token::List(list) => {
@@ -691,7 +714,10 @@ mod test {
                             item.assert_same_token(&other_list[i]);
                         }
                     } else {
-                        panic!("wrong type")
+                        panic!(
+                            "expected list, got {:?}; self is {:?}",
+                            other.token, self.token
+                        )
                     }
                 }
                 token => assert_eq!(token, &other.token),

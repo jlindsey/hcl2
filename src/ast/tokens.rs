@@ -248,6 +248,16 @@ macro_rules! operator {
 }
 
 #[macro_export]
+macro_rules! function {
+    ($n:expr, $($a:expr),*) => {
+        Token::Function(Function{
+            name: node!(rc ident!($n)),
+            args: vec![$(node!($a),)*],
+        })
+    };
+}
+
+#[macro_export]
 macro_rules! number {
     (-$s:expr) => {
         Token::UnaryOp(UnaryOp{
@@ -305,6 +315,16 @@ macro_rules! attr {
 macro_rules! list {
     ($($i:expr),*) => {
         Token::List(vec![$(node!($i),)*])
+    }
+}
+
+#[macro_export]
+macro_rules! unary {
+    ($o:expr, $i:expr) => {
+        Token::UnaryOp(UnaryOp {
+            operator: node!(rc operator!($o)),
+            operand: node!(rc $i),
+        })
     }
 }
 

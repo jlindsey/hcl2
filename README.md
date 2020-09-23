@@ -12,7 +12,7 @@ TODOs
 
 * [ ] Finish basic syntax elements
     * [ ] Objects
-    * [ ] Function calls
+    * [x] Function calls
     * [x] Number scientific notation
     * [ ] Operations
     * [ ] Expressions
