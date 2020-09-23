@@ -17,11 +17,7 @@ thiserror = "1.0"
 nom_locate = "2.0"
 nom-tracable = "0.6"
 paste = "1.0"
-
-[dependencies.nom]
-version = "5.1"
-default_features = false
-features = ["std"]
+nom = { version = "5.1", default_features = false, features = ["std"] }
 
 [dev-dependencies]
 criterion = "0.3"
