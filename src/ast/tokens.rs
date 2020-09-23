@@ -85,6 +85,8 @@ pub enum Operator {
     Less,
     GreaterEqual,
     LessEqual,
+
+    Elipsis,
 }
 
 impl TryFrom<&str> for Operator {
@@ -109,6 +111,8 @@ impl TryFrom<&str> for Operator {
             "<" => Ok(Operator::Less),
             ">=" => Ok(Operator::GreaterEqual),
             "<=" => Ok(Operator::LessEqual),
+
+            "..." => Ok(Operator::Elipsis),
 
             _ => Err(TokenError::OperatorError(value.into())),
         }

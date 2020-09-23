@@ -234,8 +234,8 @@ fn array(i: Span) -> Result {
         terminated(
             tuple((
                 recognize(pair(char('['), multispace0)),
-                opt(literal_val),
-                many0(preceded(pair(char(','), multispace0), literal_val)),
+                opt(expr_item),
+                many0(preceded(pair(char(','), multispace0), expr_item)),
             )),
             tuple((opt(char(',')), multispace0, char(']'))),
         ),
@@ -251,14 +251,68 @@ fn array(i: Span) -> Result {
 }
 
 #[tracable_parser]
+fn collection_val(i: Span) -> Result {
+    array(i)
+}
+
+#[tracable_parser]
+fn elipsis(i: Span) -> Result {
+    map(tag("..."), |span| {
+        Node::new(Token::Operator(Operator::Elipsis), &span)
+    })(i)
+}
+
+#[tracable_parser]
+fn function(i: Span) -> Result {
+    map(
+        pair(
+            identifier,
+            delimited(
+                char('('),
+                opt(tuple((
+                    expr_item,
+                    many0(preceded(pair(char(','), multispace0), expr_item)),
+                    opt(elipsis),
+                ))),
+                char(')'),
+            ),
+        ),
+        |(name, args)| {
+            let name = Rc::new(name);
+            let mut f = Function {
+                name: Rc::clone(&name),
+                args: Vec::new(),
+            };
+            if let Some((first, mut tail, maybe_elips)) = args {
+                f.args.push(first);
+                f.args.append(&mut tail);
+
+                if let Some(elips) = maybe_elips {
+                    let last = Rc::new(f.args.pop().unwrap());
+                    let op = UnaryOp {
+                        operator: Rc::new(elips),
+                        operand: Rc::clone(&last),
+                    };
+                    let last = Node::from_node(Token::UnaryOp(op), &last);
+                    f.args.push(last);
+                }
+            }
+
+            Node::from_node(Token::Function(f), &name)
+        },
+    )(i)
+}
+
+#[tracable_parser]
+fn expr_item(i: Span) -> Result {
+    alt((literal_val, collection_val, function))(i)
+}
+
+#[tracable_parser]
 fn attribute(i: Span) -> Result {
     map(
         terminated(
-            separated_pair(
-                identifier,
-                tuple((space0, char('='), space0)),
-                alt((array, literal_val)),
-            ),
+            separated_pair(identifier, tuple((space0, char('='), space0)), expr_item),
             opt(newline),
         ),
         |(ident, value): (Node, Node)| {
@@ -390,158 +444,119 @@ pub fn parse_str(i: &str) -> OResult {
 #[cfg(test)]
 mod test {
     use super::*;
+    use rstest::rstest;
 
-    impl Node {
-        fn assert_same_token(&self, other: &Node) {
-            match &self.token {
-                Token::BinaryOp(token) => {
-                    if let Some(op) = other.token.as_binary_op() {
-                        token.left.assert_same_token(&op.left);
-                        token.right.assert_same_token(&op.right);
-                        token.operator.assert_same_token(&op.operator);
-                    } else {
-                        panic!("wrong type");
-                    }
-                }
-                Token::UnaryOp(token) => {
-                    if let Some(op) = other.token.as_unary_op() {
-                        token.operand.assert_same_token(&op.operand);
-                        token.operator.assert_same_token(&op.operator);
-                    } else {
-                        panic!("wrong type");
-                    }
-                }
-                Token::Number(N::Float(f1)) => {
-                    if let Some(N::Float(f2)) = other.token.as_number() {
-                        assert!((f1 - f2).abs() < f64::EPSILON);
-                    } else {
-                        panic!("wrong type")
-                    }
-                }
-                token => assert_eq!(token, &other.token),
-            }
-        }
+    type Result = std::result::Result<(), Box<dyn std::error::Error>>;
+    #[rstest(input, expected,
+            case("test", ident!("test")),
+            case("test_with_underscores", ident!("test_with_underscores")),
+            case("test-with-dashes", ident!("test-with-dashes")),
+            case("test-14_with_numbers", ident!("test-14_with_numbers"))
+    )]
+    fn test_identfier(input: &'static str, expected: Token) -> Result {
+        let info = TracableInfo::new();
+        let (span, actual) = identifier(Span::new_extra(input, info))?;
+        assert_eq!(span.fragment().len(), 0);
+        assert_eq!(actual.token, expected);
+
+        Ok(())
     }
 
-    #[test]
-    fn test_identifier() {
-        let cases = vec![
-            ("test", ident!("test")),
-            ("test_with_underscores", ident!("test_with_underscores")),
-            ("test-with-dashes", ident!("test-with-dashes")),
-            ("test-14_with_numbers", ident!("test-14_with_numbers")),
-        ];
-
-        for (input, expected) in cases {
-            let info = TracableInfo::new();
-            let (span, actual) = identifier(Span::new_extra(input, info)).unwrap();
-            assert_eq!(span.fragment().len(), 0);
-            assert_eq!(actual.token, expected);
-        }
-    }
-
-    #[test]
-    fn test_boolean() {
+    #[rstest(input, expected,
+        case("true", boolean!(true)),
+        case("false", boolean!(false))
+    )]
+    fn test_boolean(input: &'static str, expected: Token) -> Result {
         let info = TracableInfo::default();
+        let i = Span::new_extra(input, info);
+        let (span, node) = boolean(i)?;
 
-        let cases = vec![("true", boolean!(true)), ("false", boolean!(false))];
+        assert_eq!(span.fragment().len(), 0);
+        assert_eq!(node.token, expected);
 
-        for (input, expected) in cases {
-            let input_span = Span::new_extra(input, info);
-            let (span, node) = boolean(input_span).unwrap();
-            assert_eq!(span.fragment().len(), 0);
-            assert_eq!(node.token, expected);
+        let parsed: bool = input.parse()?;
+        assert_eq!(node.token.as_boolean(), Some(parsed));
 
-            let parsed: bool = input.parse().unwrap();
-            assert_eq!(node.token.as_boolean(), Some(parsed));
-        }
+        Ok(())
     }
 
-    #[test]
-    fn test_string() {
+    #[rstest(input, expected,
+        case(r#""hello there""#, string!("hello there")),
+        case(r#""with numbers 1 2 3""#, string!("with numbers 1 2 3")),
+        case(r#""escaped \"""#, string!("escaped \\\"")),
+        case(r#""escaped \n""#, string!("escaped \\n"))
+    )]
+    fn test_string(input: &'static str, expected: Token) -> Result {
         let info = TracableInfo::default();
+        let input = Span::new_extra(input, info);
+        let (span, node) = string(input)?;
+        assert_eq!(span.fragment().len(), 0);
+        assert_eq!(node.token, expected);
 
-        let cases = vec![
-            (r#""hello there""#, string!("hello there")),
-            (r#""with numbers 1 2 3""#, string!("with numbers 1 2 3")),
-            (r#""escaped \"""#, string!("escaped \\\"")),
-            (r#""escaped \n""#, string!("escaped \\n")),
-        ];
-
-        for (input, expected) in cases {
-            let input = Span::new_extra(input, info);
-            let (span, node) = string(input).unwrap();
-            assert_eq!(span.fragment().len(), 0);
-            assert_eq!(node.token, expected);
-        }
+        Ok(())
     }
 
-    #[test]
-    fn test_number() {
+    #[rstest(input, expected,
+        case("1.23", number!(1.23)),
+        case("47", number!(47)),
+        case("17.3809", number!(17.3809)),
+        case("17892037", number!(17892037)),
+        case("-38", number!(-38)),
+        case("-471.399", number!(-471.399)),
+        case("1.7e8", number!(170000000)),
+        case("-17E10", number!(-170000000000)),
+        case("8.6e-6", number!(0.0000086))
+    )]
+    fn test_number(input: &'static str, expected: Token) -> Result {
         let info = TracableInfo::default();
+        let span = Span::new_extra(input, info);
+        let (span, node) = number(span)?;
+        assert_eq!(span.fragment().len(), 0);
+        node.assert_same_token(&node!(expected));
 
-        let cases = vec![
-            ("1.23", number!(1.23)),
-            ("47", number!(47)),
-            ("17.3809", number!(17.3809)),
-            ("17892037", number!(17892037)),
-            ("-38", number!(-38)),
-            ("-471.399", number!(-471.399)),
-            ("1.7e8", number!(170000000)),
-            ("-17E10", number!(-170000000000)),
-            ("8.6e-6", number!(0.0000086)),
-        ];
-
-        for (input, expected) in cases {
-            let span = Span::new_extra(input, info);
-            let (span, node) = number(span).unwrap();
-            assert_eq!(span.fragment().len(), 0);
-            node.assert_same_token(&node!(expected));
-        }
+        Ok(())
     }
 
-    #[test]
-    fn test_attribute() {
-        let info = TracableInfo::default();
-
-        let cases = vec![
-            ("foo = null", attr!("foo", null!())),
-            ("test_1 = true", attr!("test_1", boolean!(true))),
-            (
+    #[rstest(input, expected,
+            case("foo = null", attr!("foo", null!())),
+            case("test_1 = true", attr!("test_1", boolean!(true))),
+            case(
                 r#"test-2 = "a test string""#,
                 attr!("test-2", string!("a test string")),
             ),
-            (
+            case(
                 "another_test = -193.5\n",
                 attr!("another_test", number!(-193.5)),
-            ),
-        ];
+            )
+    )]
+    fn test_attribute(input: &'static str, expected: Token) -> Result {
+        let info = TracableInfo::default();
+        let span = Span::new_extra(input, info);
+        let (span, node) = attribute(span)?;
+        assert_eq!(span.fragment().len(), 0);
 
-        for (input, expected) in cases {
-            let span = Span::new_extra(input, info);
-            let (span, node) = attribute(span).unwrap();
-            assert_eq!(span.fragment().len(), 0);
+        let attr = node
+            .token
+            .as_attribute()
+            .ok_or("node.token was not an attribute")?;
+        let expected = expected
+            .as_attribute()
+            .ok_or("expected was not an attribute")?;
 
-            let attr = node.token.as_attribute().unwrap();
-            let expected = expected.as_attribute().unwrap();
+        // compare just the tokens; the expected node location fields
+        // are dummied and won't match
+        assert_eq!(attr.ident.token, expected.ident.token,);
+        attr.expr.assert_same_token(&expected.expr);
 
-            // compare just the tokens; the expected node location fields
-            // are dummied and won't match
-            assert_eq!(attr.ident.token, expected.ident.token,);
-            attr.expr.assert_same_token(&expected.expr);
-        }
+        Ok(())
     }
 
-    #[test]
-    fn test_tuple() {
-        let info = TracableInfo::default();
-
-        let cases = vec![
-            (
+    #[rstest(input, expected,
+            case(
                 "[true, false, null]",
                 list![boolean!(true), boolean!(false), null!()],
             ),
-            (
+           case(
                 r#"[
                 1,
                 2,
@@ -549,32 +564,54 @@ mod test {
                ]"#,
                 list![number!(1), number!(2), number!(3)],
             ),
-            ("[]", list![]),
-            (
+           case("[]", list![]),
+           case(
+               r#"[1, ["nested list", null]]"#,
+               list![number!(1), list![string!("nested list"), null!()]]),
+           case(
                 r#"[
                     "test string",
                     "another string",
                     false,
                     17.38
                    ]"#,
-                Token::List(vec![
-                    node!(string!("test string")),
-                    node!(string!("another string")),
-                    node!(boolean!(false)),
-                    node!(number!(17.38)),
-                ]),
+                list![
+                    string!("test string"),
+                    string!("another string"),
+                    boolean!(false),
+                    number!(17.38)
+                ],
             ),
-        ];
+    )]
+    fn test_tuple(input: &'static str, expected: Token) -> Result {
+        let info = TracableInfo::default();
+        let span = Span::new_extra(input, info);
+        let (span, node) = array(span)?;
+        assert_eq!(span.fragment().len(), 0);
 
-        for (input, expected) in cases {
-            let span = Span::new_extra(input, info);
-            let (span, node) = array(span).unwrap();
-            assert_eq!(span.fragment().len(), 0);
+        let expected = expected.as_list().ok_or("expected was not a list")?;
+        let items = node.token.as_list().ok_or("node.token was not a list")?;
+        for (i, item) in items.iter().enumerate() {
+            item.assert_same_token(&expected[i])
+        }
 
-            let expected = expected.as_list().unwrap();
-            for (i, item) in node.token.as_list().unwrap().iter().enumerate() {
-                assert_eq!(item.token, expected[i].token);
-            }
+        Ok(())
+    }
+
+    #[test]
+    fn test_function() {
+        let info = TracableInfo::default();
+
+        let test_str = "test_func(1, 2, 3)";
+        let input = Span::new_extra(test_str, info);
+        let (span, node) = function(input).unwrap();
+        assert_eq!(span.fragment().len(), 0);
+
+        let f = node.token.as_function().unwrap();
+        assert_eq!(f.name.token, ident!("test_func"));
+        let expected = vec![node!(number!(1)), node!(number!(2)), node!(number!(3))];
+        for (i, n) in expected.iter().enumerate() {
+            f.args[i].assert_same_token(n);
         }
     }
 
@@ -619,5 +656,46 @@ mod test {
         assert_eq!(doc.ident.token, ident!("EOF"));
         assert!(doc.truncate);
         assert_eq!(&doc.content, test_str);
+    }
+
+    impl Node {
+        fn assert_same_token(&self, other: &Node) {
+            match &self.token {
+                Token::BinaryOp(token) => {
+                    if let Some(op) = other.token.as_binary_op() {
+                        token.left.assert_same_token(&op.left);
+                        token.right.assert_same_token(&op.right);
+                        token.operator.assert_same_token(&op.operator);
+                    } else {
+                        panic!("wrong type");
+                    }
+                }
+                Token::UnaryOp(token) => {
+                    if let Some(op) = other.token.as_unary_op() {
+                        token.operand.assert_same_token(&op.operand);
+                        token.operator.assert_same_token(&op.operator);
+                    } else {
+                        panic!("wrong type");
+                    }
+                }
+                Token::Number(N::Float(f1)) => {
+                    if let Some(N::Float(f2)) = other.token.as_number() {
+                        assert!((f1 - f2).abs() < f64::EPSILON);
+                    } else {
+                        panic!("wrong type")
+                    }
+                }
+                Token::List(list) => {
+                    if let Some(other_list) = other.token.as_list() {
+                        for (i, item) in list.iter().enumerate() {
+                            item.assert_same_token(&other_list[i]);
+                        }
+                    } else {
+                        panic!("wrong type")
+                    }
+                }
+                token => assert_eq!(token, &other.token),
+            }
+        }
     }
 }
