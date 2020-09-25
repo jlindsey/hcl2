@@ -1,6 +1,16 @@
-use std::str::FromStr;
+use super::{Node, Operator, Result, Span, Token, TokenError, UnaryOp};
+use std::{convert::TryFrom, rc::Rc, str::FromStr};
 
-use super::TokenError;
+use nom::{
+    branch::alt,
+    bytes::complete::{tag, tag_no_case},
+    character::complete::{char, digit1},
+    combinator::{map, opt},
+    error::ErrorKind,
+    sequence::{pair, preceded, tuple},
+    Err,
+};
+use nom_tracable::tracable_parser;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum N {
@@ -51,7 +61,7 @@ impl N {
 impl FromStr for N {
     type Err = TokenError;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let i = s.parse::<i64>();
         if i.is_ok() {
             return Ok(N::Int(i?));
@@ -63,5 +73,128 @@ impl FromStr for N {
         }
 
         Err(f.err().unwrap().into())
+    }
+}
+
+#[tracable_parser]
+fn sign(i: Span) -> Result {
+    let (i, span) = alt((tag("-"), tag("+")))(i)?;
+    Operator::try_from(*span.fragment())
+        .map(|op| (i, Node::new(Token::Operator(op), &span)))
+        .map_err(|_| Err::Error((span, ErrorKind::ParseTo)))
+}
+
+#[tracable_parser]
+fn exponent(i: Span) -> Result<Span, i64> {
+    let (i, (maybe_sign, num)) = preceded(tag_no_case("e"), pair(opt(sign), digit1))(i)?;
+
+    let n: i64 = (*num.fragment())
+        .parse()
+        .map_err(|_| Err::Failure((i, ErrorKind::ParseTo)))?;
+
+    if let Some(Node {
+        token: Token::Operator(Operator::Minus),
+        ..
+    }) = maybe_sign
+    {
+        Ok((i, -n))
+    } else {
+        Ok((i, n))
+    }
+}
+
+// TODO: factor this out to multiple parsers
+// TODO: The negative sign is technically a uniary operation as defined by the spec
+// and so should be factored out into the expression syntax parser once that is in
+#[tracable_parser]
+pub(super) fn number(i: Span) -> Result {
+    let start = i;
+    let (i, maybe_sign) = opt(sign)(i)?;
+
+    let (i, num) = map(
+        tuple((digit1, opt(preceded(char('.'), digit1)))),
+        |(dec, maybe_fract): (Span, Option<Span>)| {
+            let mut buf = String::from(*dec.fragment());
+            if let Some(fract) = maybe_fract {
+                buf.push('.');
+                buf.push_str(*fract.fragment());
+            }
+
+            let n: N = buf
+                .parse()
+                .map_err(|_| Err::Failure((dec, ErrorKind::ParseTo)))?;
+
+            Ok(n)
+        },
+    )(i)?;
+    let num = num?;
+
+    let (i, maybe_exp) = opt(exponent)(i)?;
+    let num = maybe_exp.map_or(num, |exp| match num {
+        N::Int(i) => {
+            let pow = 10i64.pow(exp.abs() as u32);
+            if exp < 0 {
+                N::Int(i * (1 / pow))
+            } else {
+                N::Int(i * pow)
+            }
+        }
+        N::Float(f) => {
+            let pow = 10i64.pow(exp.abs() as u32) as f64;
+            if exp < 0 {
+                N::Float(f * (1.0 / pow))
+            } else {
+                N::Int((f * pow) as i64)
+            }
+        }
+    });
+
+    let num = Node::new(Token::Number(num), &start);
+
+    if let Some(
+        op @ Node {
+            token: Token::Operator(Operator::Minus),
+            ..
+        },
+    ) = maybe_sign
+    {
+        let op = Rc::new(op);
+        let unary = UnaryOp {
+            operator: Rc::clone(&op),
+            operand: Rc::new(num),
+        };
+
+        Ok((i, Node::from_node(Token::UnaryOp(unary), &op)))
+    } else {
+        Ok((i, num))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::ast::test::{info, Result};
+
+    use nom_tracable::TracableInfo;
+    use rstest::rstest;
+
+    #[rstest(input, expected,
+        case("1.23", number!(1.23)),
+        case("47", number!(47)),
+        case("17.3809", number!(17.3809)),
+        case("17892037", number!(17892037)),
+        case("-38", number!(-38)),
+        case("-471.399", number!(-471.399)),
+        case("1.7e8", number!(170000000)),
+        case("-17E10", number!(-170000000000)),
+        case("8.6e-6", number!(0.0000086))
+    )]
+    fn test_number(input: &'static str, expected: Token, info: TracableInfo) -> Result {
+        let span = Span::new_extra(input, info);
+        let (span, node) = number(span)?;
+        assert_eq!(span.fragment().len(), 0);
+        node.assert_same_token(&node!(expected));
+
+        Ok(())
     }
 }

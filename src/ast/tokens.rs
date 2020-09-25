@@ -59,6 +59,12 @@ pub struct Attribute {
     pub expr: Rc<Node>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ObjectItem {
+    pub key: Rc<Node>,
+    pub val: Rc<Node>,
+}
+
 /// Block node
 #[derive(Debug, Clone, PartialEq)]
 pub struct Block {
@@ -66,6 +72,7 @@ pub struct Block {
     pub labels: Vec<Node>,
     pub body: Option<Rc<Node>>,
 }
+
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Operator {
     Plus,
@@ -146,6 +153,7 @@ pub enum Token {
     // Containers
     List(Vec<Node>),
     Object(Vec<Node>),
+    ObjectItem(ObjectItem),
 
     // Body elements
     LineComment(String),
@@ -210,6 +218,7 @@ impl Token {
 
     gen_as!(list, Token::List(l), &Vec<Node>, l);
     gen_as!(object, Token::Object(o), &Vec<Node>, o);
+    gen_as!(object_item, Token::ObjectItem(oi), &ObjectItem, oi);
 
     gen_as!(line_comment, Token::LineComment(s), &str, s);
     gen_as!(block_comment, Token::BlockComment(s), &str, s);
@@ -237,6 +246,17 @@ macro_rules! ident {
 macro_rules! string {
     ($s:expr) => {
         Token::String(String::from($s))
+    };
+}
+
+#[macro_export]
+macro_rules! heredoc {
+    ($i:expr, $t:expr, $s:expr) => {
+        Token::Heredoc(Heredoc{
+            ident: node!(rc ident!($i)),
+            truncate: $t,
+            content: String::from($s),
+        })
     };
 }
 
@@ -319,6 +339,20 @@ macro_rules! list {
 }
 
 #[macro_export]
+macro_rules! object_item {
+    ($k:expr => $v:expr) => {
+        Token::ObjectItem(ObjectItem{key: node!(rc $k), val: node!(rc $v)})
+    }
+}
+
+#[macro_export]
+macro_rules! object {
+    ($($k:expr => $v:expr),*) => {
+        Token::Object(vec![$(node!(object_item!($k => $v)),)*])
+    }
+}
+
+#[macro_export]
 macro_rules! unary {
     ($o:expr, $i:expr) => {
         Token::UnaryOp(UnaryOp {
@@ -334,29 +368,23 @@ mod test {
 
     #[test]
     fn as_null() {
-        let a = Token::Null;
-        assert_eq!(a.as_null(), Some(()));
-
-        let b = Token::False;
-        assert_eq!(b.as_null(), None);
-
-        let c = Token::Identifier("testing".into());
-        assert_eq!(c.as_null(), None);
+        assert_eq!(null!().as_null(), Some(()));
+        assert_eq!(boolean!(false).as_null(), None);
+        assert_eq!(ident!("testing").as_null(), None);
     }
 
     #[test]
     fn as_identifier() {
-        let a = Token::Identifier("test_ident".into());
-        assert_eq!(a.as_identifier(), Some("test_ident"));
+        assert_eq!(ident!("test_ident").as_identifier(), Some("test_ident"));
     }
 
     #[test]
     fn as_boolean() {
-        let t = Token::True;
+        let t = boolean!(true);
         assert_eq!(t.as_boolean(), Some(true));
         assert_eq!(t.as_true(), Some(()));
 
-        let f = Token::False;
+        let f = boolean!(false);
         assert_eq!(f.as_boolean(), Some(false));
         assert_eq!(f.as_false(), Some(()));
     }
