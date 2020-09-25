@@ -6,10 +6,12 @@ mod collection;
 mod literal;
 mod node;
 mod number;
+mod operation;
 
 use collection::collection;
 use literal::{literal, single_line_string};
 use number::number;
+use operation::operation;
 
 pub use node::Node;
 pub use number::N;
@@ -116,14 +118,9 @@ fn conditional(i: Span) -> Result {
 }
 
 #[tracable_parser]
-fn operation(i: Span) -> Result {
-    todo!()
-}
-
-#[tracable_parser]
 fn expression(i: Span) -> Result {
     //alt((expr_term, operation, conditional))(i)
-    expr_term(i)
+    alt((expr_term, operation))(i)
 }
 
 #[tracable_parser]

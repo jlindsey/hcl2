@@ -1,9 +1,9 @@
+use super::operation::sign;
 use super::{Node, Operator, Result, Span, Token, TokenError, UnaryOp};
-use std::{convert::TryFrom, rc::Rc, str::FromStr};
+use std::{rc::Rc, str::FromStr};
 
 use nom::{
-    branch::alt,
-    bytes::complete::{tag, tag_no_case},
+    bytes::complete::tag_no_case,
     character::complete::{char, digit1},
     combinator::{map, opt},
     error::ErrorKind,
@@ -74,14 +74,6 @@ impl FromStr for N {
 
         Err(f.err().unwrap().into())
     }
-}
-
-#[tracable_parser]
-fn sign(i: Span) -> Result {
-    let (i, span) = alt((tag("-"), tag("+")))(i)?;
-    Operator::try_from(*span.fragment())
-        .map(|op| (i, Node::new(Token::Operator(op), &span)))
-        .map_err(|_| Err::Error((span, ErrorKind::ParseTo)))
 }
 
 #[tracable_parser]
@@ -174,6 +166,7 @@ pub(super) fn number(i: Span) -> Result {
 mod test {
     use super::*;
     use crate::ast::test::{info, Result};
+    use std::convert::TryFrom;
 
     use nom_tracable::TracableInfo;
     use rstest::rstest;
