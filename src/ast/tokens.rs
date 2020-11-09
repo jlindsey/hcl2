@@ -373,6 +373,17 @@ macro_rules! unary_op {
 }
 
 #[macro_export]
+macro_rules! binary_op {
+    ($l:expr, $o:expr, $r:expr) => {
+        Token::BinaryOp(BinaryOp{
+            left: node!(rc $l),
+            operator: node!(rc operator!($o)),
+            right: node!(rc $r),
+        })
+    }
+}
+
+#[macro_export]
 macro_rules! conditional {
     ($t:expr, $l:expr, $r:expr) => {
         Token::Conditional(Conditional{

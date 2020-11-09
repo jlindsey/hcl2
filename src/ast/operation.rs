@@ -129,7 +129,10 @@ pub(super) fn operation(i: Span) -> Result {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ast::test::{info, Result};
+    use crate::ast::{
+        test::{info, Result},
+        Function, ObjectItem,
+    };
     use std::convert::TryFrom;
 
     use nom_tracable::TracableInfo;
@@ -137,12 +140,58 @@ mod test {
 
     #[rstest(input, expected,
         case("!foo", node!(unary_op!("!", ident!("foo")))),
-        case("-test", node!(unary_op!("-", ident!("test"))))
+        case("-test", node!(unary_op!("-", ident!("test")))),
+        case("!test_func(13)", node!(unary_op!("!", function!("test_func", number!(13))))),
+        case("- 14", node!(unary_op!("-", number!(14)))),
+        case("!true", node!(unary_op!("!", boolean!(true)))),
+        case("![1, true, false]", node!(unary_op!("!", list!(number!(1), boolean!(true), boolean!(false)))))
     )]
     fn test_unary_op(input: &'static str, expected: Node, info: TracableInfo) -> Result {
         let span = Span::new_extra(input, info);
         let (span, node) = unary_operation(span)?;
         assert!(span.fragment().is_empty());
+
+        node.assert_same_token(&expected);
+
+        Ok(())
+    }
+
+    #[rstest(input, expected,
+        case("1 > 2", node!(binary_op!(number!(1), ">", number!(2)))),
+        case("2 < false", node!(binary_op!(number!(2), "<", boolean!(false)))),
+        case("foo == bar", node!(binary_op!(ident!("foo"), "==", ident!("bar")))),
+        case("baz != \"hello\"", node!(binary_op!(ident!("baz"), "!=", string!("hello")))),
+        case("14.3 % 5", node!(binary_op!(number!(14.3), "%", number!(5)))),
+        case("test * 7", node!(binary_op!(ident!("test"), "*", number!(7)))),
+        case("17 - 73", node!(binary_op!(number!(17), "-", number!(73)))),
+        case("bar + 18", node!(binary_op!(ident!("bar"), "+", number!(18)))),
+        case("foo && bar", node!(binary_op!(ident!("foo"), "&&", ident!("bar")))),
+        case("foo || bar", node!(binary_op!(ident!("foo"), "||", ident!("bar")))),
+        case("foo && (bar || baz)", node!(
+            binary_op!(
+                ident!("foo"),
+                "&&",
+                 binary_op!(
+                     ident!("bar"),
+                     "||",
+                     ident!("baz"))))),
+        case(
+            "{test: true} && {test: false}",
+            node!(binary_op!(
+                object!(ident!("test") => boolean!(true)),
+                "&&",
+                object!(ident!("test") => boolean!(false))
+            ))
+        )
+    )]
+    fn test_binary_op(input: &'static str, expected: Node, info: TracableInfo) -> Result {
+        let span = Span::new_extra(input, info);
+        let (span, node) = binary_operation(span)?;
+        assert!(
+            span.fragment().is_empty(),
+            "expected fragment to be empty; got {}",
+            span.fragment()
+        );
 
         node.assert_same_token(&expected);
 

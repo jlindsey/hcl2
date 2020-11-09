@@ -26,7 +26,7 @@
             * [ ] Index postfix operator
             * [ ] Attribute access postfix operator
             * [ ] Splat operator
-        * [ ] Operations
+        * [x] Operations
             * [x] Unary
                 * [x] Negative sign (`-`)
                 * [x] Boolean negation (`!`)

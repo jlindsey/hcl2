@@ -126,7 +126,11 @@ pub(super) fn collection(i: Span) -> Result {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ast::test::{info, Result};
+    use crate::ast::{
+        test::{info, Result},
+        BinaryOp, Operator, UnaryOp,
+    };
+    use std::convert::TryFrom;
 
     use nom_tracable::TracableInfo;
     use rstest::rstest;
@@ -170,6 +174,10 @@ mod test {
                 number!(17.38)
             ],
         ),
+        case(
+            "[false, foo == bar, null]",
+            list![boolean!(false), binary_op!(ident!("foo"), "==", ident!("bar")), null!()],
+        )
     )]
     fn test_tuple(input: &'static str, expected: Token, info: TracableInfo) -> Result {
         let span = Span::new_extra(input, info);
@@ -210,6 +218,14 @@ mod test {
                     ident!("object") => list!(number!(1), number!(2), number!(3))
                 )
             )
+        )
+    ),
+    case(
+        "{test: foo == bar, test_2: 7 + 13.2, test_3: !baz}",
+        object!(
+            ident!("test") => binary_op!(ident!("foo"), "==", ident!("bar")),
+            ident!("test_2") => binary_op!(number!(7), "+", number!(13.2)),
+            ident!("test_3") => unary_op!("!", ident!("baz"))
         )
     )
     )]

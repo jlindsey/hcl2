@@ -113,8 +113,17 @@ fn variable(i: Span) -> Result {
 }
 
 #[tracable_parser]
+fn sub_expression(i: Span) -> Result {
+    delimited(
+        tuple((char('('), multispace0)),
+        expression,
+        tuple((multispace0, char(')'))),
+    )(i)
+}
+
+#[tracable_parser]
 fn expr_term(i: Span) -> Result {
-    alt((literal, collection, function, variable))(i)
+    alt((literal, collection, function, variable, sub_expression))(i)
 }
 
 #[tracable_parser]
@@ -137,7 +146,12 @@ fn conditional(i: Span) -> Result {
 
 #[tracable_parser]
 fn expression(i: Span) -> Result {
-    alt((expr_term, operation, conditional))(i)
+    let (_, line): (_, Span) = peek(not_line_ending)(i)?;
+    if line.fragment().contains(":?") {
+        conditional(i)
+    } else {
+        alt((operation, expr_term))(i)
+    }
 }
 
 #[tracable_parser]
