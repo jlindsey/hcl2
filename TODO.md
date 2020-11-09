@@ -14,9 +14,9 @@
                 * [x] Booleans
                 * [x] Numbers
                 * [x] Nulls
-            * [ ] Collections
+            * [x] Collections
                 * [x] Lists
-                * [ ] Objects
+                * [x] Objects
             * [ ] Templates
                 * [x] String literals
                 * [x] Heredocs
@@ -27,27 +27,27 @@
             * [ ] Attribute access postfix operator
             * [ ] Splat operator
         * [ ] Operations
-            * [ ] Unary
+            * [x] Unary
                 * [x] Negative sign (`-`)
-                * [ ] Boolean negation (`!`)
-            * [ ] Binary
-                * [ ] Comparisons
-                    * [ ] Equality (`==`)
-                    * [ ] Inequality (`!=`)
-                    * [ ] Less than (`<`)
-                    * [ ] Greater than (`>`)
-                    * [ ] Less than or equal (`<=`)
-                    * [ ] Greater than or equal (`>=`)
-                * [ ] Arithmetic
-                    * [ ] Sum (`+`)
-                    * [ ] Difference (`-`)
-                    * [ ] Product (`*`)
-                    * [ ] Quotient (`/`)
-                    * [ ] Modulus (`%`)
-                * [ ] Logical
-                    * And (`&&`)
-                    * Or (`||`)
-        * [ ] Conditional (ternary operator)
+                * [x] Boolean negation (`!`)
+            * [x] Binary
+                * [x] Comparisons
+                    * [x] Equality (`==`)
+                    * [x] Inequality (`!=`)
+                    * [x] Less than (`<`)
+                    * [x] Greater than (`>`)
+                    * [x] Less than or equal (`<=`)
+                    * [x] Greater than or equal (`>=`)
+                * [x] Arithmetic
+                    * [x] Sum (`+`)
+                    * [x] Difference (`-`)
+                    * [x] Product (`*`)
+                    * [x] Quotient (`/`)
+                    * [x] Modulus (`%`)
+                * [x] Logical
+                    * [x] And (`&&`)
+                    * [x] Or (`||`)
+        * [x] Conditional (ternary operator)
 * [ ] Context-based Evaluation
 * [ ] Unicode compliance pass
 * [ ] Serde serialize / deserialze

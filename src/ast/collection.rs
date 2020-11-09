@@ -5,7 +5,7 @@ use super::{expression, identifier, Node, ObjectItem, Result, Span, Token};
 use nom::{
     branch::alt,
     character::complete::{anychar, char, multispace0},
-    combinator::{map, opt, peek, recognize},
+    combinator::{map, not, opt, peek, recognize},
     error::ErrorKind,
     multi::many0,
     sequence::{pair, preceded, separated_pair, terminated, tuple},
@@ -13,21 +13,38 @@ use nom::{
 };
 use nom_tracable::tracable_parser;
 
+#[tracable_parser]
+fn array_end(i: Span) -> Result {
+    map(
+        tuple((opt(char(',')), multispace0, char(']'))),
+        |(_, _, _)| Node::default(),
+    )(i)
+}
+
 // NOTE: technically a "tuple" in the spec, but that name is reserved here
 #[tracable_parser]
 fn array(i: Span) -> Result {
+    let (i, start) = recognize(pair(char('['), multispace0))(i)?;
+    // short-circuit empty array
+    if let Ok((i, _)) = array_end(i) {
+        return Ok((i, Node::new(Token::List(Vec::new()), &start)));
+    }
+
     map(
         terminated(
             tuple((
-                recognize(pair(char('['), multispace0)),
                 opt(expression),
-                many0(preceded(pair(char(','), multispace0), expression)),
+                many0(pair(
+                    not(array_end),
+                    preceded(pair(char(','), multispace0), expression),
+                )),
             )),
-            tuple((opt(char(',')), multispace0, char(']'))),
+            array_end,
         ),
-        |(start, first, mut tail): (Span, Option<Node>, Vec<Node>)| {
+        move |(first, tail): (Option<Node>, Vec<((), Node)>)| {
             let items = first.map_or(Vec::new(), |head| {
                 let mut v = vec![head];
+                let mut tail = tail.into_iter().map(|(_, node)| node).collect();
                 v.append(&mut tail);
                 v
             });
@@ -59,19 +76,35 @@ fn object_item(i: Span) -> Result {
 }
 
 #[tracable_parser]
+fn object_end(i: Span) -> Result {
+    map(
+        tuple((opt(char(',')), multispace0, char('}'))),
+        |(_, _, _)| Node::default(),
+    )(i)
+}
+
+#[tracable_parser]
 fn object(i: Span) -> Result {
+    let (i, start) = recognize(pair(char('{'), multispace0))(i)?;
+    if let Ok((i, _)) = object_end(i) {
+        return Ok((i, Node::new(Token::Object(Vec::new()), &start)));
+    }
+
     map(
         terminated(
             tuple((
-                recognize(pair(char('{'), multispace0)),
                 opt(object_item),
-                many0(preceded(pair(char(','), multispace0), object_item)),
+                many0(pair(
+                    not(object_end),
+                    preceded(pair(char(','), multispace0), object_item),
+                )),
             )),
-            tuple((opt(char(',')), multispace0, char('}'))),
+            object_end,
         ),
-        |(start, first, mut tail)| {
+        move |(first, tail): (Option<Node>, Vec<((), Node)>)| {
             let items = first.map_or(Vec::new(), |head| {
                 let mut v = vec![head];
+                let mut tail = tail.into_iter().map(|(_, node)| node).collect();
                 v.append(&mut tail);
                 v
             });
@@ -99,11 +132,10 @@ mod test {
     use rstest::rstest;
 
     #[rstest(input, expected,
+        case("[null]", list!(null!())),
+        case("[true, false, null]", list![boolean!(true), boolean!(false), null!()]),
+        case("[]", list![]),
         case(
-            "[true, false, null]",
-            list![boolean!(true), boolean!(false), null!()],
-        ),
-       case(
             r#"[
             1,
             2,
@@ -111,11 +143,20 @@ mod test {
            ]"#,
             list![number!(1), number!(2), number!(3)],
         ),
-       case("[]", list![]),
-       case(
-           r#"[1, ["nested list", null]]"#,
-           list![number!(1), list![string!("nested list"), null!()]]),
-       case(
+        case(
+            r#"[1, ["nested list", null]]"#,
+            list![number!(1), list![string!("nested list"), null!()]]),
+        case(
+            "[true, [false, [null, [1]]]]",
+            list!(boolean!(true),
+                list!(boolean!(false),
+                    list!(null!(),
+                        list!(number!(1))
+                    )
+                )
+            )
+        ),
+        case(
             r#"[
                 "test string",
                 "another string",
@@ -147,6 +188,13 @@ mod test {
     #[rstest(input, expected,
     case(r#"{test: "string"}"#, object!(ident!("test") => string!("string"))),
     case(r#"{test = "string"}"#, object!(ident!("test") => string!("string"))),
+    case("{}", object!()),
+    case("{ 12 = true, [1, 2] = [3] }",
+        object!(
+            number!(12) => boolean!(true),
+            list!(number!(1), number!(2)) => list!(number!(3))
+        )
+    ),
     case(
         "{test = 1, test_2 = 2.2, test_3: true}",
         object!(

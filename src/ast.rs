@@ -20,8 +20,8 @@ pub use tokens::*;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while_m_n},
-    character::complete::{anychar, char, multispace0, newline, space0, space1},
-    combinator::{all_consuming, complete, map, opt, peek},
+    character::complete::{anychar, char, multispace0, newline, not_line_ending, space0, space1},
+    combinator::{all_consuming, complete, map, opt, peek, recognize},
     error::ErrorKind,
     multi::{fold_many1, many0, separated_list},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
@@ -108,19 +108,36 @@ fn function(i: Span) -> Result {
 }
 
 #[tracable_parser]
+fn variable(i: Span) -> Result {
+    identifier(i)
+}
+
+#[tracable_parser]
 fn expr_term(i: Span) -> Result {
-    alt((literal, collection, function))(i)
+    alt((literal, collection, function, variable))(i)
 }
 
 #[tracable_parser]
 fn conditional(i: Span) -> Result {
-    todo!()
+    let qm = recognize(tuple((space0, char('?'), space0)));
+    let colon = recognize(tuple((space0, char(':'), space0)));
+    map(
+        tuple((expression, qm, expression, colon, expression)),
+        |(cond, _, left, _, right)| {
+            let cond = Rc::new(cond);
+            let c = Conditional {
+                condition: Rc::clone(&cond),
+                if_true: Rc::new(left),
+                if_false: Rc::new(right),
+            };
+            Node::from_node(Token::Conditional(c), &cond)
+        },
+    )(i)
 }
 
 #[tracable_parser]
 fn expression(i: Span) -> Result {
-    //alt((expr_term, operation, conditional))(i)
-    alt((expr_term, operation))(i)
+    alt((expr_term, operation, conditional))(i)
 }
 
 #[tracable_parser]
@@ -206,14 +223,29 @@ fn multi_line_block(i: Span) -> Result {
 
 #[tracable_parser]
 fn block(i: Span) -> Result {
-    alt((one_line_block, multi_line_block))(i)
+    let (_, line): (_, Span) = peek(not_line_ending)(i)?;
+    if line.fragment().contains('}') {
+        one_line_block(i)
+    } else {
+        multi_line_block(i)
+    }
+}
+
+#[tracable_parser]
+fn body_item(i: Span) -> Result {
+    let (_, line): (_, Span) = peek(not_line_ending)(i)?;
+    if line.fragment().contains('=') {
+        attribute(i)
+    } else {
+        block(i)
+    }
 }
 
 #[tracable_parser]
 fn body(i: Span) -> Result {
     map(
         fold_many1(
-            preceded(multispace0, alt((attribute, block))),
+            preceded(multispace0, body_item),
             Vec::new(),
             |mut body, node| {
                 body.push(node);
@@ -226,7 +258,7 @@ fn body(i: Span) -> Result {
 
 fn file(i: Span) -> OResult {
     let (_, tree) = all_consuming(complete(fold_many1(
-        delimited(multispace0, alt((attribute, block)), multispace0),
+        delimited(multispace0, body_item, multispace0),
         Tree::new(),
         |mut tree, node| {
             tree.push(node);
@@ -322,7 +354,7 @@ mod test {
         case("foo(false)", function!("foo", boolean!(false))),
         case(
             "bar([1, 2, 3]...)",
-            function!("bar", unary!("...", list!(number!(1), number!(2), number!(3))))
+            function!("bar", unary_op!("...", list!(number!(1), number!(2), number!(3))))
         ),
     )]
     fn test_function(input: &'static str, expected: Token, info: TracableInfo) -> Result {
@@ -341,6 +373,33 @@ mod test {
         for (i, n) in expected.args.iter().enumerate() {
             f.args[i].assert_same_token(n);
         }
+
+        Ok(())
+    }
+
+    #[rstest(input, expected,
+        case(r#""string" ? true : false"#, conditional!(string!("string"), boolean!(true), boolean!(false))),
+        case(
+            r#"func("input") ? [1] : null"#,
+            conditional!(function!("func", string!("input")), list!(number!(1)), null!())
+        )
+    )]
+    fn test_conditional(input: &'static str, expected: Token, info: TracableInfo) -> Result {
+        let input = Span::new_extra(input, info);
+        let (span, node) = conditional(input)?;
+        assert!(span.fragment().is_empty());
+
+        let cond = node
+            .token
+            .as_conditional()
+            .ok_or("node.token was not a conditional")?;
+        let expected = expected
+            .as_conditional()
+            .ok_or("expected was not a conditional")?;
+
+        cond.condition.assert_same_token(&expected.condition);
+        cond.if_true.assert_same_token(&expected.if_true);
+        cond.if_false.assert_same_token(&expected.if_false);
 
         Ok(())
     }

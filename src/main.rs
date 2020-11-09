@@ -6,7 +6,7 @@ use std::{
 };
 
 use hcl2::ast::parse_str;
-use nom_tracable::{cumulative_histogram, histogram};
+use nom_tracable::{self, cumulative_histogram, histogram};
 
 fn main() {
     let mut buf = vec![];

@@ -37,6 +37,14 @@ pub struct Function {
     pub args: Vec<Node>,
 }
 
+/// Conditional (ternary operation) node
+#[derive(Debug, Clone, PartialEq)]
+pub struct Conditional {
+    pub condition: Rc<Node>,
+    pub if_true: Rc<Node>,
+    pub if_false: Rc<Node>,
+}
+
 /// Uniary operation node
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnaryOp {
@@ -146,6 +154,7 @@ pub enum Token {
 
     // Expression terms
     Function(Function),
+    Conditional(Conditional),
     Operator(Operator),
     BinaryOp(BinaryOp),
     UnaryOp(UnaryOp),
@@ -212,6 +221,7 @@ impl Token {
     gen_as!(heredoc, Token::Heredoc(h), &Heredoc, h);
 
     gen_as!(function, Token::Function(f), &Function, f);
+    gen_as!(conditional, Token::Conditional(c), &Conditional, c);
     gen_as!(operator, Token::Operator(o), &Operator, o);
     gen_as!(binary_op, Token::BinaryOp(o), &BinaryOp, o);
     gen_as!(unary_op, Token::UnaryOp(u), &UnaryOp, u);
@@ -353,11 +363,22 @@ macro_rules! object {
 }
 
 #[macro_export]
-macro_rules! unary {
+macro_rules! unary_op {
     ($o:expr, $i:expr) => {
         Token::UnaryOp(UnaryOp {
             operator: node!(rc operator!($o)),
             operand: node!(rc $i),
+        })
+    }
+}
+
+#[macro_export]
+macro_rules! conditional {
+    ($t:expr, $l:expr, $r:expr) => {
+        Token::Conditional(Conditional{
+            condition: node!(rc $t),
+            if_true: node!(rc $l),
+            if_false: node!(rc $r),
         })
     }
 }

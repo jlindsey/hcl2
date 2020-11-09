@@ -62,6 +62,19 @@ mod test {
                         );
                     }
                 }
+                Token::Function(func) => {
+                    if let Some(other_func) = other.token.as_function() {
+                        func.name.assert_same_token(&other_func.name);
+                        for (i, arg) in func.args.iter().enumerate() {
+                            arg.assert_same_token(&other_func.args[i]);
+                        }
+                    } else {
+                        panic!(
+                            "expected Function, got {:#?}; self is {:#?}",
+                            other.token, self.token
+                        );
+                    }
+                }
                 Token::BinaryOp(token) => {
                     if let Some(op) = other.token.as_binary_op() {
                         token.left.assert_same_token(&op.left);
