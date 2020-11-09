@@ -10,6 +10,7 @@ repos:
       - id: check-added-large-files
       - id: check-merge-conflict
       - id: check-toml
+      - id: check-yaml
 
   - repo: https://github.com/doublify/pre-commit-rust
     rev: master
