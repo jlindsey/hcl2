@@ -1,6 +1,6 @@
 HCL2
 ====
-[![builds.sr.ht status](https://builds.sr.ht/~jlindsey/hcl2.svg)](https://builds.sr.ht/~jlindsey/hcl2?)
+[![Rust](https://github.com/jlindsey/hcl2/workflows/Rust/badge.svg)](https://github.com/jlindsey/hcl2/actions?query=workflow%3ARust)
 
 Rust [HCL2][1] parsing and serialization lib.
 
