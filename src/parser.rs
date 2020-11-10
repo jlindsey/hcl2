@@ -158,6 +158,26 @@ fn attr_splat(i: Span) -> Result {
 }
 
 #[tracable_parser]
+fn full_splat(i: Span) -> Result {
+    let (i, span) = position(i)?;
+    let node = Node::new(Token::Operator(Operator::FullSplat), &span);
+    preceded(
+        tag("[*]"),
+        fold_many0(alt((attr_access, index_access)), node, |node, access| {
+            let access_op = access.token.as_unary_op().cloned().unwrap();
+            let node = Rc::new(node);
+            let op = BinaryOp {
+                left: Rc::clone(&node),
+                operator: access_op.operator,
+                right: access_op.operand,
+            };
+
+            Node::from_node(Token::BinaryOp(op), &node)
+        }),
+    )(i)
+}
+
+#[tracable_parser]
 fn expr_postfix(i: Span) -> Result {
     let (_, head): (_, Span) = take(2usize)(i)?;
     let mut head = head.fragment().chars();
@@ -171,7 +191,7 @@ fn expr_postfix(i: Span) -> Result {
         }
         Some('[') => {
             if let Some('*') = head.next() {
-                todo!()
+                full_splat(i)
             } else {
                 index_access(i)
             }
@@ -193,12 +213,21 @@ fn sub_expression(i: Span) -> Result {
 fn expr_term(i: Span) -> Result {
     let (rest, term) = alt((literal, collection, function, variable, sub_expression))(i)?;
     fold_many0(expr_postfix, term, |node, postfix| {
-        let postfix_op = postfix.token.as_unary_op().cloned().unwrap();
         let node = Rc::new(node);
-        let op = BinaryOp {
-            left: Rc::clone(&node),
-            operator: postfix_op.operator,
-            right: postfix_op.operand,
+        let postfix = Rc::new(postfix);
+
+        let op = match &postfix.token {
+            Token::BinaryOp(op) => BinaryOp {
+                left: Rc::clone(&node),
+                operator: op.operator.clone(),
+                right: Rc::clone(&postfix),
+            },
+            Token::UnaryOp(op) => BinaryOp {
+                left: Rc::clone(&node),
+                operator: op.operator.clone(),
+                right: op.operand.clone(),
+            },
+            _ => panic!("wrong type"),
         };
         Node::from_node(Token::BinaryOp(op), &node)
     })(rest)
@@ -418,6 +447,48 @@ mod test {
             case(
                 "another_test = -193.5\n",
                 attr!("another_test", number!(-193.5)),
+            ),
+            case(
+                "testing = var.foo\n",
+                attr!("testing", binary_op!(ident!("var"), ".", ident!("foo")))
+            ),
+            case(
+                "testing = foo.*.bar.baz",
+                attr!(
+                    "testing",
+                    binary_op!(
+                        ident!("foo"),
+                        ".",
+                        binary_op!(
+                            binary_op!(
+                                Token::Operator(Operator::AttrSplat),
+                                ".",
+                                ident!("bar")
+                            ),
+                            ".",
+                            ident!("baz")
+                        )
+                    )
+                )
+            ),
+            case (
+                "testing = foo[*].bar.baz",
+                attr!(
+                    "testing",
+                    binary_op!(
+                        ident!("foo"),
+                        ".",
+                        binary_op!(
+                            binary_op!(
+                                Token::Operator(Operator::FullSplat),
+                                ".",
+                                ident!("bar")
+                            ),
+                            ".",
+                            ident!("baz")
+                        )
+                    )
+                )
             )
     )]
     fn test_attribute(input: &'static str, expected: Token, info: TracableInfo) -> Result {
@@ -435,7 +506,7 @@ mod test {
 
         // compare just the tokens; the expected node location fields
         // are dummied and won't match
-        assert_eq!(attr.ident.token, expected.ident.token,);
+        assert_eq!(attr.ident.token, expected.ident.token);
         attr.expr.assert_same_token(&expected.expr);
 
         Ok(())
