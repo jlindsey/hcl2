@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use hcl2::ast::parse_str;
+use hcl2::parser::parse_str;
 
 const TEST_BODY: &str = r#"
 test block "label" {

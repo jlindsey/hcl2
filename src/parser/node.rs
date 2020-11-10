@@ -45,10 +45,10 @@ impl Node {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ast::N;
+    use crate::parser::N;
 
     impl Node {
-        pub(in crate::ast) fn assert_same_token(&self, other: &Node) {
+        pub(in crate::parser) fn assert_same_token(&self, other: &Node) {
             match &self.token {
                 Token::Heredoc(doc) => {
                     if let Some(other_doc) = other.token.as_heredoc() {

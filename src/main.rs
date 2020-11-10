@@ -5,7 +5,7 @@ use std::{
     time::Instant,
 };
 
-use hcl2::ast::parse_str;
+use hcl2::parser::parse_str;
 use nom_tracable::{self, cumulative_histogram, histogram};
 
 fn main() {

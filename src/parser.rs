@@ -19,14 +19,15 @@ pub use tokens::*;
 
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_while, take_while_m_n},
+    bytes::complete::{tag, take, take_while, take_while_m_n},
     character::complete::{anychar, char, multispace0, newline, not_line_ending, space0, space1},
     combinator::{all_consuming, complete, map, opt, peek, recognize},
     error::ErrorKind,
-    multi::{fold_many1, many0, separated_list},
+    multi::{fold_many0, fold_many1, many0, separated_list},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
+    Err,
 };
-use nom_locate::LocatedSpan;
+use nom_locate::{position, LocatedSpan};
 use nom_tracable::{tracable_parser, TracableInfo};
 
 pub type Span<'a> = LocatedSpan<&'a str, TracableInfo>;
@@ -113,6 +114,73 @@ fn variable(i: Span) -> Result {
 }
 
 #[tracable_parser]
+fn attr_access(i: Span) -> Result {
+    let (i, span) = position(i)?;
+    map(preceded(char('.'), identifier), move |node| {
+        let unop = UnaryOp {
+            operator: Rc::new(Node::new(Token::Operator(Operator::AttrAccess), &span)),
+            operand: Rc::new(node),
+        };
+        Node::new(Token::UnaryOp(unop), &span)
+    })(i)
+}
+
+#[tracable_parser]
+fn index_access(i: Span) -> Result {
+    let (i, span) = position(i)?;
+    map(delimited(char('['), expression, char(']')), move |node| {
+        let unop = UnaryOp {
+            operator: Rc::new(Node::new(Token::Operator(Operator::IndexAccess), &span)),
+            operand: Rc::new(node),
+        };
+        Node::new(Token::UnaryOp(unop), &span)
+    })(i)
+}
+
+#[tracable_parser]
+fn attr_splat(i: Span) -> Result {
+    let (i, span) = position(i)?;
+    let node = Node::new(Token::Operator(Operator::AttrSplat), &span);
+    preceded(
+        tag(".*"),
+        fold_many0(attr_access, node, |node, attr| {
+            let attr_op = attr.token.as_unary_op().cloned().unwrap();
+            let node = Rc::new(node);
+            let op = BinaryOp {
+                left: Rc::clone(&node),
+                operator: attr_op.operator,
+                right: attr_op.operand,
+            };
+
+            Node::from_node(Token::BinaryOp(op), &node)
+        }),
+    )(i)
+}
+
+#[tracable_parser]
+fn expr_postfix(i: Span) -> Result {
+    let (_, head): (_, Span) = take(2usize)(i)?;
+    let mut head = head.fragment().chars();
+    match head.next() {
+        Some('.') => {
+            if let Some('*') = head.next() {
+                attr_splat(i)
+            } else {
+                attr_access(i)
+            }
+        }
+        Some('[') => {
+            if let Some('*') = head.next() {
+                todo!()
+            } else {
+                index_access(i)
+            }
+        }
+        _ => Err(Err::Error((i, ErrorKind::Alt))),
+    }
+}
+
+#[tracable_parser]
 fn sub_expression(i: Span) -> Result {
     delimited(
         tuple((char('('), multispace0)),
@@ -123,7 +191,17 @@ fn sub_expression(i: Span) -> Result {
 
 #[tracable_parser]
 fn expr_term(i: Span) -> Result {
-    alt((literal, collection, function, variable, sub_expression))(i)
+    let (rest, term) = alt((literal, collection, function, variable, sub_expression))(i)?;
+    fold_many0(expr_postfix, term, |node, postfix| {
+        let postfix_op = postfix.token.as_unary_op().cloned().unwrap();
+        let node = Rc::new(node);
+        let op = BinaryOp {
+            left: Rc::clone(&node),
+            operator: postfix_op.operator,
+            right: postfix_op.operand,
+        };
+        Node::from_node(Token::BinaryOp(op), &node)
+    })(rest)
 }
 
 #[tracable_parser]

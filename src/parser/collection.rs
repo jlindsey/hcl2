@@ -126,7 +126,7 @@ pub(super) fn collection(i: Span) -> Result {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ast::{
+    use crate::parser::{
         test::{info, Result},
         BinaryOp, Operator, UnaryOp,
     };

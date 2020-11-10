@@ -165,7 +165,7 @@ pub(super) fn number(i: Span) -> Result {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ast::test::{info, Result};
+    use crate::parser::test::{info, Result};
     use std::convert::TryFrom;
 
     use nom_tracable::TracableInfo;

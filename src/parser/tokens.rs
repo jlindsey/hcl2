@@ -83,25 +83,32 @@ pub struct Block {
 
 #[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Operator {
+    // Arithmetic
     Plus,
     Minus,
     Multiply,
     Divide,
     Modulus,
 
+    // Logical
     And,
     Or,
     Not,
 
+    // Comparison
     Equal,
     NotEqual,
-
     Greater,
     Less,
     GreaterEqual,
     LessEqual,
 
+    // Postfix
     Elipsis,
+    AttrAccess,
+    IndexAccess,
+    AttrSplat,
+    FullSplat,
 }
 
 impl TryFrom<&str> for Operator {
@@ -115,19 +122,23 @@ impl TryFrom<&str> for Operator {
             "/" => Ok(Operator::Divide),
             "%" => Ok(Operator::Modulus),
 
+            "!" => Ok(Operator::Not),
             "&&" => Ok(Operator::And),
             "||" => Ok(Operator::Or),
-            "!" => Ok(Operator::Not),
 
             "==" => Ok(Operator::Equal),
             "!=" => Ok(Operator::NotEqual),
-
             ">" => Ok(Operator::Greater),
             "<" => Ok(Operator::Less),
             ">=" => Ok(Operator::GreaterEqual),
             "<=" => Ok(Operator::LessEqual),
 
             "..." => Ok(Operator::Elipsis),
+
+            ".*" => Ok(Operator::AttrSplat),
+            "[*]" => Ok(Operator::FullSplat),
+            "[" => Ok(Operator::IndexAccess),
+            "." => Ok(Operator::AttrAccess),
 
             _ => Err(TokenError::OperatorError(value.into())),
         }

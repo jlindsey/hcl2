@@ -96,7 +96,7 @@ pub(super) fn literal(i: Span) -> Result {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ast::test::{info, Result};
+    use crate::parser::test::{info, Result};
     use nom_tracable::TracableInfo;
 
     use rstest::rstest;

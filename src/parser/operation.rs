@@ -129,7 +129,7 @@ pub(super) fn operation(i: Span) -> Result {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::ast::{
+    use crate::parser::{
         test::{info, Result},
         Function, ObjectItem,
     };
@@ -182,6 +182,46 @@ mod test {
                 "&&",
                 object!(ident!("test") => boolean!(false))
             ))
+        ),
+        case(
+            "var.foo == var.bar",
+            node!(binary_op!(
+                binary_op!(
+                    ident!("var"),
+                    ".",
+                    ident!("foo")
+                ),
+                "==",
+                binary_op!(
+                    ident!("var"),
+                    ".",
+                    ident!("bar")
+                )
+            ))
+        ),
+        case(
+            r#"var.foo[3] + var.bar["test"]"#,
+            node!(binary_op!(
+                binary_op!(
+                    binary_op!(
+                        ident!("var"),
+                        ".",
+                        ident!("foo")
+                    ),
+                    "[",
+                    number!(3)
+                ),
+                "+",
+                binary_op!(
+                    binary_op!(
+                        ident!("var"),
+                        ".",
+                        ident!("bar")
+                    ),
+                    "[",
+                    string!("test")
+                )
+            ))
         )
     )]
     fn test_binary_op(input: &'static str, expected: Node, info: TracableInfo) -> Result {
@@ -192,6 +232,9 @@ mod test {
             "expected fragment to be empty; got {}",
             span.fragment()
         );
+
+        println!("expected: {:#?}", expected);
+        println!("node: {:#?}", node);
 
         node.assert_same_token(&expected);
 
