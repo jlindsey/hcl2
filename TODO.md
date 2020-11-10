@@ -1,4 +1,4 @@
-* [ ] AST parser
+* [ ] Parser
     * [x] Identifiers
     * [x] Comments
     * [x] Structual Elements
@@ -21,11 +21,15 @@
                 * [x] String literals
                 * [x] Heredocs
                 * [ ] Template sub-language
+            * [x] Variables
             * [x] Function calls
             * [ ] For loops (list/object comprehensions)
-            * [ ] Index postfix operator
-            * [ ] Attribute access postfix operator
-            * [ ] Splat operator
+            * [x] Postfix operators
+                * [x] Attribute access (`var.foo.bar`)
+                * [x] Index access (`var.foo[12]`)
+                * [x] Splat operators
+                    * [x] Attribute Splat (`.*`)
+                    * [x] Full Splat (`[*]`)
         * [x] Operations
             * [x] Unary
                 * [x] Negative sign (`-`)
