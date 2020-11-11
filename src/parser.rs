@@ -110,12 +110,13 @@ fn function(i: Span) -> Result {
 
 #[tracable_parser]
 fn variable(i: Span) -> Result {
-    map(identifier, |node| {
-        Node::from_node(
-            Token::Variable(node.token.as_identifier().unwrap().to_string()),
-            &node,
-        )
-    })(i)
+    identifier(i)
+    // map(identifier, |node| {
+    //     Node::from_node(
+    //         Token::Variable(node.token.as_identifier().unwrap().to_string()),
+    //         &node,
+    //     )
+    // })(i)
 }
 
 #[tracable_parser]
