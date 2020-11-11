@@ -45,6 +45,23 @@ pub struct Conditional {
     pub if_false: Rc<Node>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum ForLoop {
+    Tuple {
+        binds: Vec<Node>,
+        expr: Rc<Node>,
+        body: Rc<Node>,
+        cond: Option<Rc<Node>>,
+    },
+    Object {
+        binds: Vec<Node>,
+        expr: Rc<Node>,
+        body: Rc<(Node, Node)>,
+        cond: Option<Rc<Node>>,
+        grouping: bool,
+    },
+}
+
 /// Uniary operation node
 #[derive(Debug, Clone, PartialEq)]
 pub struct UnaryOp {
@@ -154,6 +171,7 @@ pub enum Token {
     Unknown,
 
     Identifier(String),
+    Variable(String),
 
     // Basic literal types
     Null,
@@ -174,6 +192,7 @@ pub enum Token {
     List(Vec<Node>),
     Object(Vec<Node>),
     ObjectItem(ObjectItem),
+    ForLoop(ForLoop),
 
     // Body elements
     LineComment(String),
@@ -223,6 +242,7 @@ macro_rules! gen_as {
 
 impl Token {
     gen_as!(identifier, Token::Identifier(s), &str, s);
+    gen_as!(variable, Token::Variable(v), &str, v);
 
     gen_as!(null, Token::Null);
     gen_as!(true, Token::True);
@@ -240,6 +260,7 @@ impl Token {
     gen_as!(list, Token::List(l), &Vec<Node>, l);
     gen_as!(object, Token::Object(o), &Vec<Node>, o);
     gen_as!(object_item, Token::ObjectItem(oi), &ObjectItem, oi);
+    gen_as!(for_loop, Token::ForLoop(f), &ForLoop, f);
 
     gen_as!(line_comment, Token::LineComment(s), &str, s);
     gen_as!(block_comment, Token::BlockComment(s), &str, s);

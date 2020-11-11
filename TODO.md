@@ -23,7 +23,7 @@
                 * [ ] Template sub-language
             * [x] Variables
             * [x] Function calls
-            * [ ] For loops (list/object comprehensions)
+            * [x] For loops (list/object comprehensions)
             * [x] Postfix operators
                 * [x] Attribute access (`var.foo.bar`)
                 * [x] Index access (`var.foo[12]`)
