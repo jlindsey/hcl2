@@ -21,7 +21,7 @@ nom = { version = "5.1", default_features = false, features = ["std"] }
 
 [dev-dependencies]
 criterion = "0.3"
-rstest = "0.6"
+rstest = "0.13"
 
 [[bench]]
 name = "parse"
